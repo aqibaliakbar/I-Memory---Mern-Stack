@@ -1,100 +1,65 @@
 import React from "react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import img from "../assets/Circle-icons-cloud.svg.png";
-import { Link, useLocation } from "react-router-dom";
-import { useEffect } from "react";
-import { useNavigate } from "react-router-dom";
 
 const Navbar = () => {
-  let navigate = useNavigate();
+  const navigate = useNavigate();
+  const location = useLocation();
 
   const handleLogout = () => {
     localStorage.removeItem("authToken");
     navigate("/login");
   };
 
-  let location = useLocation();
-  useEffect(() => {}, [location]);
+  const isActive = (path) => location.pathname === path;
 
   return (
-    <div>
-      {localStorage.getItem("authToken") ? (
-        <nav className="navbar navbar-expand-lg ">
-          <div className="container-fluid ">
-            <Link className="navbar-brand nav-text" to="/">
-              <img id="img1" src={img} alt="" />
+    <nav className="bg-[#6494b4] shadow-md">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="flex items-center justify-between h-16">
+          <div className="flex items-center">
+            <Link to="/" className="flex-shrink-0">
+              <img className="h-8 w-8" src={img} alt="I-Memory Logo" />
+            </Link>
+            <Link to="/" className="text-white text-xl font-semibold ml-2">
               I-Memory
             </Link>
-            <button
-              className="navbar-toggler "
-              type="button"
-              data-bs-toggle="collapse"
-              data-bs-target="#navbarSupportedContent"
-              aria-controls="navbarSupportedContent"
-              aria-expanded="false"
-              aria-label="Toggle navigation"
-            >
-              <span className="navbar-toggler-icon "></span>
-            </button>
-            <div
-              className="collapse navbar-collapse"
-              id="navbarSupportedContent"
-            >
-              <ul className="navbar-nav me-auto mb-2 mb-lg-0">
-                <li className="nav-item">
-                  <Link
-                    className={`nav-link nav-text ${
-                      location.pathname === "/" ? "active" : ""
-                    }`}
-                    aria-current="page"
-                    to="/"
-                  >
-                    Home
-                  </Link>
-                </li>
-                <li className="nav-item">
-                  <Link
-                    className={`nav-link nav-text ${
-                      location.pathname === "/about" ? "active" : ""
-                    }`}
-                    to="/about"
-                  >
-                    About
-                  </Link>
-                </li>
-              </ul>
-              {!localStorage.getItem("authToken") ? (
-                <form className="d-flex"></form>
-              ) : (
+          </div>
+          {localStorage.getItem("authToken") && (
+            <div className="hidden md:block">
+              <div className="ml-10 flex items-baseline space-x-4">
+                <Link
+                  to="/"
+                  className={`px-3 py-2 rounded-md text-sm font-medium ${
+                    isActive("/")
+                      ? "bg-[#567c92] text-white"
+                      : "text-white hover:bg-[#567c92] hover:text-white"
+                  }`}
+                >
+                  Home
+                </Link>
+                <Link
+                  to="/about"
+                  className={`px-3 py-2 rounded-md text-sm font-medium ${
+                    isActive("/about")
+                      ? "bg-[#567c92] text-white"
+                      : "text-white hover:bg-[#567c92] hover:text-white"
+                  }`}
+                >
+                  About
+                </Link>
                 <button
-                  className="btn btn-outline-success btn-1 mx-2"
                   onClick={handleLogout}
+                  className="px-3 py-2 rounded-md text-sm font-medium text-white bg-[#567c92]  hover:text-[#6494b4] transition duration-300"
                 >
                   Logout
                 </button>
-              )}
+              </div>
             </div>
-          </div>
-        </nav>
-      ) : (
-        <div>
-          {" "}
-          <Link
-            className="btn btn-outline-success btn-1 mx-3 mt-4 float-end "
-            to="/login"
-            role="button"
-          >
-            Login
-          </Link>
-          <Link
-            className="btn btn-outline-success btn-1 mx-2 mt-4 float-end"
-            to="/signup"
-            role="button"
-          >
-            Signup
-          </Link>{" "}
+          )}
         </div>
-      )}
-    </div>
+      </div>
+    </nav>
   );
 };
 

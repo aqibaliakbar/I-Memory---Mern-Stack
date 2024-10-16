@@ -12,6 +12,7 @@ node_modules
 /build
 backendnotes.txt
 /Notes Frontend
+.env
 
 # misc
 .DS_Store

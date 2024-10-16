@@ -1,15 +1,16 @@
 const mongoose = require("mongoose");
 
-const mongoURI = "mongodb://0.0.0.0:27017/notememory";
-
-const connectToMongo = () => {
-  mongoose
-    .connect(mongoURI)
-    .then(() => console.log("Successfully connected to Mongo"))
-
-    .catch((err) => {
-      console.error(err);
+const connectToMongo = async () => {
+  try {
+    await mongoose.connect(process.env.MONGODB_URI, {
+      useNewUrlParser: true,
+      useUnifiedTopology: true,
     });
+    console.log("Connected to MongoDB successfully");
+  } catch (error) {
+    console.error("Failed to connect to MongoDB:", error);
+    process.exit(1);
+  }
 };
 
 module.exports = connectToMongo;

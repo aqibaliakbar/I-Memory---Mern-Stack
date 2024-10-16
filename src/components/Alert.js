@@ -1,22 +1,26 @@
 import React from "react";
 
-export default function Alert(props) {
-  let capitalize = (word) => {
-    let lower = word.toLowerCase();
-    return lower.charAt(0).toUpperCase() + lower.slice(1);
+const Alert = ({ alert }) => {
+  const capitalize = (word) => {
+    if (word && typeof word === "string") {
+      return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+    }
+    return "";
   };
+
   return (
-    <div style={{ height: "50px" }}>
-      {props.alert && (
-        <div>
-          <div
-            className={`alert alert-light alert-dismissible fade show`}
-            role="alert"
-          >
-            <strong>{capitalize(props.alert.type)}</strong> : {props.alert.msg}
-          </div>
+    <div>
+      {alert && (
+        <div
+          className={`bg-white text-[#6494b4] px-4 py-3 rounded relative`}
+          role="alert"
+        >
+          <strong className="font-bold mr-1">{capitalize(alert.type)}:</strong>
+          <span className="block sm:inline">{alert.msg}</span>
         </div>
       )}
     </div>
   );
-}
+};
+
+export default Alert;

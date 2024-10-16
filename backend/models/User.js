@@ -4,24 +4,29 @@ const { Schema } = mongoose;
 const UserSchema = new Schema({
   name: {
     type: String,
-    reqiured: true,
+    required: true,
   },
-
   email: {
     type: String,
-    reqiured: true,
+    required: true,
     unique: true,
   },
-
   password: {
     type: String,
-    reqiured: true,
+    required: true,
   },
-
   date: {
-    type: String,
-    default: new Date(),
+    type: Date,
+    default: Date.now,
   },
+  isVerified: {
+    type: Boolean,
+    default: false,
+  },
+  verificationOTP: String,
+  verificationOTPExpires: Date,
+  resetPasswordOTP: String,
+  resetPasswordOTPExpires: Date,
 });
 
 const User = mongoose.model("user", UserSchema);

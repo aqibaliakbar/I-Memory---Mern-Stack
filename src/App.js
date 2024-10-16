@@ -1,13 +1,44 @@
-import "./App.css";
+import React from "react";
+import {
+  BrowserRouter as Router,
+  Route,
+  Routes,
+  Navigate,
+} from "react-router-dom";
 import Navbar from "./components/Navbar";
-import { Route, Routes } from "react-router-dom";
 import Home from "./components/Home";
 import About from "./components/About";
-import NoteState from "./context/notes/NoteState";
 import Login from "./components/Login";
 import Signup from "./components/Signup";
 import Alert from "./components/Alert";
+import NoteState from "./context/notes/NoteState";
 import { useState } from "react";
+// import ForgotPassword from "./components/ForgotPassword";
+// import ResetPassword from "./components/ResetPassword";
+
+// Layout components
+const MainLayout = ({ children }) => (
+  <>
+    <Navbar />
+    {children}
+  </>
+);
+
+const AuthLayout = ({ children }) => (
+  <div className="auth-layout">{children}</div>
+);
+
+// Protected Route component
+const ProtectedRoute = ({ children }) => {
+  const isAuthenticated = localStorage.getItem("authToken");
+  return isAuthenticated ? children : <Navigate to="/login" />;
+};
+
+// Guest Route component
+const GuestRoute = ({ children }) => {
+  const isAuthenticated = localStorage.getItem("authToken");
+  return !isAuthenticated ? children : <Navigate to="/" />;
+};
 
 function App() {
   const [alert, setAlert] = useState(null);
@@ -23,29 +54,76 @@ function App() {
   };
 
   return (
-    <>
+    <Router>
       <NoteState>
-        <Navbar />
         <Alert alert={alert} />
+        <Routes>
+          {/* Protected Routes */}
+          <Route
+            path="/"
+            element={
+              <ProtectedRoute>
+                <MainLayout>
+                  <Home showAlert={showAlert} />
+                </MainLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/about"
+            element={
+              <ProtectedRoute>
+                <MainLayout>
+                  <About />
+                </MainLayout>
+              </ProtectedRoute>
+            }
+          />
 
-        <div className="container">
-          <Routes>
-            <Route exact path="/" element={<Home showAlert={showAlert} />} />
-            <Route exact path="/about" element={<About />} />
-            <Route
-              exact
-              path="/login"
-              element={<Login showAlert={showAlert} />}
-            />
-            <Route
-              exact
-              path="/signup"
-              element={<Signup showAlert={showAlert} />}
-            />
-          </Routes>
-        </div>
+          {/* Guest Routes */}
+          <Route
+            path="/login"
+            element={
+              <GuestRoute>
+                <AuthLayout>
+                  <Login showAlert={showAlert} />
+                </AuthLayout>
+              </GuestRoute>
+            }
+          />
+          <Route
+            path="/signup"
+            element={
+              <GuestRoute>
+                <AuthLayout>
+                  <Signup showAlert={showAlert} />
+                </AuthLayout>
+              </GuestRoute>
+            }
+          />
+          {/* <Route
+            path="/forgot-password"
+            element={
+              <GuestRoute>
+                <AuthLayout>
+                  <ForgotPassword />
+                </AuthLayout>{" "}
+              </GuestRoute>
+            }
+          />
+          <Route
+            path="/reset-password"
+            element={
+              <GuestRoute>
+                <AuthLayout>
+                  <ResetPassword />{" "}
+                </AuthLayout>
+              </GuestRoute>
+            }
+          /> */}
+        </Routes>
       </NoteState>
-    </>
+    </Router>
   );
 }
 
