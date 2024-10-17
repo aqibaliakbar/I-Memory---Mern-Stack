@@ -9,25 +9,28 @@ const Login = ({ showAlert }) => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    const response = await fetch("http://localhost:5000/api/auth/login", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(credentials),
-    });
-    const json = await response.json();
-    if (json.success) {
-      localStorage.setItem("authToken", json.authToken);
-      showAlert("Logged in Successfully", "success");
-      navigate("/");
-    } else {
-      showAlert("Invalid Details", "Error");
+    try {
+      const response = await fetch("http://localhost:5000/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(credentials),
+      });
+      const json = await response.json();
+      if (json.success) {
+        localStorage.setItem("authToken", json.authToken);
+        showAlert("Logged in Successfully", "success");
+        navigate("/");
+      } else {
+        showAlert(json.errors || "Invalid credentials", "error");
+      }
+    } catch (error) {
+      showAlert("An error occurred. Please try again.", "error");
     }
   };
 
   const onChange = (e) => {
     setCredentials({ ...credentials, [e.target.name]: e.target.value });
   };
-
   return (
     <div className="min-h-screen h-screen bg-gradient-to-br from-[#6494b4] to-[#567c92] flex">
       {/* Left Section */}
@@ -185,7 +188,7 @@ const Login = ({ showAlert }) => {
                   </button>
                 </div>
               </div>
-              <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between">
                 <div className="flex items-center">
                   <input
                     id="remember-me"
@@ -193,16 +196,14 @@ const Login = ({ showAlert }) => {
                     type="checkbox"
                     className="h-4 w-4 text-[#6494b4] focus:ring-[#6494b4] border-gray-300 rounded"
                   />
-                  <label
-                    htmlFor="remember-me"
-                    className="ml-2 block text-sm text-[#567c92]"
-                  >
+                  <label htmlFor="remember-me" className="ml-2 block text-sm text-[#567c92]">
                     Remember me
                   </label>
                 </div>
                 <div className="text-sm">
                   <a
                     href="#"
+                    onClick={() => navigate("/forgot-password")}
                     className="font-medium text-[#6494b4] hover:text-[#567c92]"
                   >
                     Forgot your password?

@@ -1,0 +1,17 @@
+:root {
+  --toastify-color-success: #6494b4;
+  --toastify-color-error: #e74c3c;
+  --toastify-color-info: #567c92;
+  --toastify-icon-color-success: var(--toastify-color-success);
+  --toastify-icon-color-error: var(--toastify-color-error);
+  --toastify-icon-color-info: var(--toastify-color-info);
+}
+
+.Toastify__progress-bar {
+  background-color: var(--toastify-color-progress-light);
+}
+
+.Toastify__toast {
+  border-radius: 8px;
+  font-family: 'Your-Font-Family', sans-serif;
+}

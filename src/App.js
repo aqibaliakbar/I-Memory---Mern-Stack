@@ -10,11 +10,15 @@ import Home from "./components/Home";
 import About from "./components/About";
 import Login from "./components/Login";
 import Signup from "./components/Signup";
-import Alert from "./components/Alert";
+// import Alert from "./components/Alert";
 import NoteState from "./context/notes/NoteState";
 import { useState } from "react";
-// import ForgotPassword from "./components/ForgotPassword";
-// import ResetPassword from "./components/ResetPassword";
+import ForgotPassword from "./components/ForgotPassword";
+import ResetPassword from "./components/ResetPassword";
+import { ToastContainer, toast } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
+import "./toastify-config.css";
+import NotFound from "./components/NotFound";
 
 // Layout components
 const MainLayout = ({ children }) => (
@@ -41,22 +45,25 @@ const GuestRoute = ({ children }) => {
 };
 
 function App() {
-  const [alert, setAlert] = useState(null);
 
-  const showAlert = (message, type) => {
-    setAlert({
-      msg: message,
-      type: type,
-    });
-    setTimeout(() => {
-      setAlert(null);
-    }, 1500);
-  };
+
+   const showAlert = (message, type) => {
+     switch (type) {
+       case "success":
+         toast.success(message);
+         break;
+       case "error":
+         toast.error(message);
+         break;
+       default:
+         toast.info(message);
+     }
+   };
 
   return (
     <Router>
       <NoteState>
-        <Alert alert={alert} />
+        <ToastContainer position="top-right" autoClose={3000} />
         <Routes>
           {/* Protected Routes */}
           <Route
@@ -101,12 +108,12 @@ function App() {
               </GuestRoute>
             }
           />
-          {/* <Route
+          <Route
             path="/forgot-password"
             element={
               <GuestRoute>
                 <AuthLayout>
-                  <ForgotPassword />
+                  <ForgotPassword showAlert={showAlert} />
                 </AuthLayout>{" "}
               </GuestRoute>
             }
@@ -116,11 +123,12 @@ function App() {
             element={
               <GuestRoute>
                 <AuthLayout>
-                  <ResetPassword />{" "}
+                  <ResetPassword showAlert={showAlert} />{" "}
                 </AuthLayout>
               </GuestRoute>
             }
-          /> */}
+          />
+          <Route path="*" element={<NotFound />} />
         </Routes>
       </NoteState>
     </Router>
