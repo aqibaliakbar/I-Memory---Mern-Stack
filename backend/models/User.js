@@ -15,18 +15,32 @@ const UserSchema = new Schema({
     type: String,
     required: true,
   },
+  phoneNumber: {
+    type: String,
+    required: true,
+    unique: true,
+  },
   date: {
     type: Date,
     default: Date.now,
   },
-  isVerified: {
+  isEmailVerified: {
     type: Boolean,
     default: false,
   },
-  verificationOTP: String,
+  isPhoneVerified: {
+    type: Boolean,
+    default: false,
+  },
+  emailVerificationOTP: String,
+  phoneVerificationOTP: String,
   verificationOTPExpires: Date,
   resetPasswordOTP: String,
   resetPasswordOTPExpires: Date,
+  smsNotificationsEnabled: {
+    type: Boolean,
+    default: true,
+  },
 });
 
 const User = mongoose.model("user", UserSchema);

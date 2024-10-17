@@ -1,24 +1,43 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useGoogleReCaptcha } from "react-google-recaptcha-v3";
 import img from "../assets/Circle-icons-cloud.svg.png";
 
 const ForgotPassword = ({ showAlert }) => {
   const navigate = useNavigate();
+  const { executeRecaptcha } = useGoogleReCaptcha();
   const [email, setEmail] = useState("");
   const [otpSent, setOtpSent] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!executeRecaptcha) {
+      console.log("Execute recaptcha not yet available");
+      return;
+    }
+
+    const token = await executeRecaptcha("forgotPassword");
+    if (!token) {
+      showAlert("reCAPTCHA verification failed", "error");
+      return;
+    }
+
     try {
-      const response = await fetch("http://localhost:5000/api/auth/forgot-password", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email }),
-      });
+      const response = await fetch(
+        "http://localhost:5000/api/auth/forgot-password",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email, captchaToken: token }),
+        }
+      );
       const json = await response.json();
       if (json.message) {
         setOtpSent(true);
-        showAlert("OTP sent to your email. Please check.", "success");
+        showAlert(
+          "OTP sent to your email and phone (if enabled). Please check.",
+          "success"
+        );
       } else {
         showAlert(json.error, "error");
       }
@@ -35,12 +54,15 @@ const ForgotPassword = ({ showAlert }) => {
           <h3 className="text-3xl font-bold text-[#6494b4]">I-Memory</h3>
         </div>
         <h4 className="text-2xl text-[#567c92] text-center mb-8">
-          {otpSent ? "Check Your Email" : "Forgot Password"}
+          {otpSent ? "Check Your Email and Phone" : "Forgot Password"}
         </h4>
         {!otpSent ? (
           <form onSubmit={handleSubmit} className="space-y-6">
             <div>
-              <label htmlFor="email" className="block text-sm font-medium text-[#6494b4] mb-1">
+              <label
+                htmlFor="email"
+                className="block text-sm font-medium text-[#6494b4] mb-1"
+              >
                 Email address
               </label>
               <input
@@ -64,7 +86,8 @@ const ForgotPassword = ({ showAlert }) => {
         ) : (
           <div className="text-center">
             <p className="text-[#567c92] mb-4">
-              An OTP has been sent to your email. Use it to reset your password.
+              An OTP has been sent to your email and phone (if enabled). Use it
+              to reset your password.
             </p>
             <button
               onClick={() => navigate("/reset-password")}

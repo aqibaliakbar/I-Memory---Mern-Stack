@@ -19,6 +19,9 @@ import { ToastContainer, toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import "./toastify-config.css";
 import NotFound from "./components/NotFound";
+import { GoogleReCaptchaProvider } from "react-google-recaptcha-v3";
+
+
 
 // Layout components
 const MainLayout = ({ children }) => (
@@ -43,6 +46,20 @@ const GuestRoute = ({ children }) => {
   const isAuthenticated = localStorage.getItem("authToken");
   return !isAuthenticated ? children : <Navigate to="/" />;
 };
+
+const ReCaptchaWrapper = ({ children }) => (
+  <GoogleReCaptchaProvider
+    reCaptchaKey={"6Lc_N2QqAAAAALCAfUeIdTCaWLpbULXvme-jqaK8"}
+    scriptProps={{
+      async: false,
+      defer: false,
+      appendTo: "head",
+      nonce: undefined,
+    }}
+  >
+    {children}
+  </GoogleReCaptchaProvider>
+);
 
 function App() {
 
@@ -98,12 +115,15 @@ function App() {
               </GuestRoute>
             }
           />
+
           <Route
             path="/signup"
             element={
               <GuestRoute>
                 <AuthLayout>
-                  <Signup showAlert={showAlert} />
+                  <ReCaptchaWrapper>
+                    <Signup showAlert={showAlert} />
+                  </ReCaptchaWrapper>
                 </AuthLayout>
               </GuestRoute>
             }
@@ -113,7 +133,9 @@ function App() {
             element={
               <GuestRoute>
                 <AuthLayout>
-                  <ForgotPassword showAlert={showAlert} />
+                  <ReCaptchaWrapper>
+                    <ForgotPassword showAlert={showAlert} />
+                  </ReCaptchaWrapper>
                 </AuthLayout>{" "}
               </GuestRoute>
             }
@@ -123,7 +145,9 @@ function App() {
             element={
               <GuestRoute>
                 <AuthLayout>
-                  <ResetPassword showAlert={showAlert} />{" "}
+                  <ReCaptchaWrapper>
+                    <ResetPassword showAlert={showAlert} />{" "}
+                  </ReCaptchaWrapper>
                 </AuthLayout>
               </GuestRoute>
             }

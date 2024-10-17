@@ -1,20 +1,27 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import { useGoogleReCaptcha } from 'react-google-recaptcha-v3';
 import img from "../assets/Circle-icons-cloud.svg.png";
 import PasswordStrengthMeter from "./PasswordStrengthMeter";
 
 const Signup = ({ showAlert }) => {
   const navigate = useNavigate();
+  const { executeRecaptcha } = useGoogleReCaptcha();
+  const [step, setStep] = useState(1);
   const [credentials, setCredentials] = useState({
     name: "",
     email: "",
+    phoneNumber: "",
     password: "",
     cpassword: "",
   });
   const [showPassword, setShowPassword] = useState(false);
   const [showCPassword, setShowCPassword] = useState(false);
-  const [otp, setOtp] = useState("");
+  const [emailOtp, setEmailOtp] = useState("");
+  const [phoneOtp, setPhoneOtp] = useState("");
   const [otpSent, setOtpSent] = useState(false);
+  const [emailVerified, setEmailVerified] = useState(false);
+  const [phoneVerified, setPhoneVerified] = useState(false);
   const [countdown, setCountdown] = useState(0);
 
   useEffect(() => {
@@ -30,6 +37,17 @@ const Signup = ({ showAlert }) => {
       showAlert("Passwords do not match", "error");
       return;
     }
+    if (!executeRecaptcha) {
+      console.log("Execute recaptcha not yet available");
+      return;
+    }
+
+    const token = await executeRecaptcha("signup");
+    if (!token) {
+      showAlert("reCAPTCHA verification failed", "error");
+      return;
+    }
+
     try {
       const response = await fetch(
         "http://localhost:5000/api/auth/createuser",
@@ -39,7 +57,9 @@ const Signup = ({ showAlert }) => {
           body: JSON.stringify({
             name: credentials.name,
             email: credentials.email,
+            phoneNumber: credentials.phoneNumber,
             password: credentials.password,
+            captchaToken: token,
           }),
         }
       );
@@ -47,7 +67,11 @@ const Signup = ({ showAlert }) => {
       if (json.success) {
         setOtpSent(true);
         setCountdown(600); // 10 minutes
-        showAlert("OTP sent to your email. Please verify.", "success");
+        setStep(4); // Move to OTP verification step
+        showAlert(
+          "OTPs sent to your email and phone. Please verify.",
+          "success"
+        );
       } else {
         showAlert(json.error, "error");
       }
@@ -56,7 +80,7 @@ const Signup = ({ showAlert }) => {
     }
   };
 
-  const handleVerifyOTP = async (e) => {
+  const handleVerifyEmail = async (e) => {
     e.preventDefault();
     try {
       const response = await fetch(
@@ -64,14 +88,14 @@ const Signup = ({ showAlert }) => {
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email: credentials.email, otp }),
+          body: JSON.stringify({ email: credentials.email, otp: emailOtp }),
         }
       );
       const json = await response.json();
       if (json.success) {
-        localStorage.setItem("authToken", json.authToken);
-        navigate("/");
-        showAlert("Account created and verified successfully", "success");
+        setEmailVerified(true);
+        showAlert("Email verified successfully", "success");
+        setStep(5); // Move to phone verification step
       } else {
         showAlert(json.error, "error");
       }
@@ -80,7 +104,37 @@ const Signup = ({ showAlert }) => {
     }
   };
 
-  const handleResendOTP = async () => {
+  const handleVerifyPhone = async (e) => {
+    e.preventDefault();
+    try {
+      const response = await fetch(
+        "http://localhost:5000/api/auth/verify-phone",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            phoneNumber: credentials.phoneNumber,
+            otp: phoneOtp,
+          }),
+        }
+      );
+      const json = await response.json();
+      if (json.success) {
+        setPhoneVerified(true);
+        showAlert(json.message, "success");
+        if (json.authToken) {
+          localStorage.setItem("authToken", json.authToken);
+          navigate("/");
+        }
+      } else {
+        showAlert(json.error, "error");
+      }
+    } catch (error) {
+      showAlert("An error occurred. Please try again.", "error");
+    }
+  };
+
+  const handleResendOTP = async (type) => {
     try {
       const response = await fetch(
         "http://localhost:5000/api/auth/resend-otp",
@@ -89,14 +143,15 @@ const Signup = ({ showAlert }) => {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             email: credentials.email,
-            type: "verification",
+            phoneNumber: credentials.phoneNumber,
+            type: type,
           }),
         }
       );
       const json = await response.json();
       if (json.message) {
         setCountdown(600);
-        showAlert("New OTP sent. Please check your email.", "success");
+        showAlert(`New OTP sent to your ${type}. Please check.`, "success");
       } else {
         showAlert(json.error, "error");
       }
@@ -107,6 +162,323 @@ const Signup = ({ showAlert }) => {
 
   const onChange = (e) => {
     setCredentials({ ...credentials, [e.target.name]: e.target.value });
+  };
+
+  const renderStep = () => {
+    switch (step) {
+      case 1:
+        return (
+          <>
+            <h4 className="text-2xl text-[#567c92] text-center mb-8">
+              Step 1: Personal Information
+            </h4>
+            <div className="space-y-6">
+              <div>
+                <label
+                  htmlFor="name"
+                  className="block text-sm font-medium text-[#6494b4] mb-1"
+                >
+                  Full Name
+                </label>
+                <input
+                  type="text"
+                  id="name"
+                  name="name"
+                  value={credentials.name}
+                  onChange={onChange}
+                  required
+                  className="w-full px-4 py-3 bg-gray-50 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#6494b4] focus:border-transparent transition duration-300"
+                  placeholder="Enter your full name"
+                />
+              </div>
+              <div>
+                <label
+                  htmlFor="email"
+                  className="block text-sm font-medium text-[#6494b4] mb-1"
+                >
+                  Email address
+                </label>
+                <input
+                  type="email"
+                  id="email"
+                  name="email"
+                  value={credentials.email}
+                  onChange={onChange}
+                  required
+                  className="w-full px-4 py-3 bg-gray-50 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#6494b4] focus:border-transparent transition duration-300"
+                  placeholder="Enter your email"
+                />
+              </div>
+              <button
+                onClick={() => setStep(2)}
+                className="w-full bg-[#6494b4] text-white py-3 px-4 rounded-md hover:bg-[#567c92] transition duration-300 shadow-md text-lg font-semibold"
+              >
+                Next
+              </button>
+            </div>
+          </>
+        );
+      case 2:
+        return (
+          <>
+            <h4 className="text-2xl text-[#567c92] text-center mb-8">
+              Step 2: Contact Information
+            </h4>
+            <div className="space-y-6">
+              <div>
+                <label
+                  htmlFor="phoneNumber"
+                  className="block text-sm font-medium text-[#6494b4] mb-1"
+                >
+                  Phone Number
+                </label>
+                <input
+                  type="tel"
+                  id="phoneNumber"
+                  name="phoneNumber"
+                  value={credentials.phoneNumber}
+                  onChange={onChange}
+                  required
+                  className="w-full px-4 py-3 bg-gray-50 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#6494b4] focus:border-transparent transition duration-300"
+                  placeholder="Enter your phone number"
+                />
+              </div>
+              <div className="flex justify-between">
+                <button
+                  onClick={() => setStep(1)}
+                  className="bg-gray-300 text-gray-700 py-2 px-4 rounded-md hover:bg-gray-400 transition duration-300 shadow-md text-lg font-semibold"
+                >
+                  Back
+                </button>
+                <button
+                  onClick={() => setStep(3)}
+                  className="bg-[#6494b4] text-white py-2 px-4 rounded-md hover:bg-[#567c92] transition duration-300 shadow-md text-lg font-semibold"
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+          </>
+        );
+      case 3:
+        return (
+          <>
+            <h4 className="text-2xl text-[#567c92] text-center mb-8">
+              Step 3: Set Password
+            </h4>
+            <form onSubmit={handleSubmit} className="space-y-6">
+              <div>
+                <label
+                  htmlFor="password"
+                  className="block text-sm font-medium text-[#6494b4] mb-1"
+                >
+                  Password
+                </label>
+                <div className="relative">
+                  <input
+                    type={showPassword ? "text" : "password"}
+                    id="password"
+                    name="password"
+                    value={credentials.password}
+                    onChange={onChange}
+                    required
+                    minLength={5}
+                    className="w-full px-4 py-3 bg-gray-50 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#6494b4] focus:border-transparent transition duration-300"
+                    placeholder="Create a password"
+                  />
+                  <button
+                    type="button"
+                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-sm leading-5"
+                    onClick={() => setShowPassword(!showPassword)}
+                  >
+                    {showPassword ? (
+                      <svg
+                        className="h-6 w-6 text-gray-500"
+                        fill="none"
+                        xmlns="http://www.w3.org/2000/svg"
+                        viewBox="0 0 640 512"
+                      >
+                        <path
+                          fill="currentColor"
+                          d="M320 400c-75.85 0-137.25-58.71-142.9-133.11L72.2 185.82c-13.79 17.3-26.48 35.59-36.72 55.59a32.35 32.35 0 0 0 0 29.19C89.71 376.41 197.07 448 320 448c26.91 0 52.87-4 77.89-10.46L346 397.39a144.13 144.13 0 0 1-26 2.61zm313.82 58.1l-110.55-85.44a331.25 331.25 0 0 0 81.25-102.07 32.35 32.35 0 0 0 0-29.19C550.29 135.59 442.93 64 320 64a308.15 308.15 0 0 0-147.32 37.7L45.46 3.37A16 16 0 0 0 23 6.18L3.37 31.45A16 16 0 0 0 6.18 53.9l588.36 454.73a16 16 0 0 0 22.46-2.81l19.64-25.27a16 16 0 0 0-2.82-22.45zm-183.72-142l-39.3-30.38A94.75 94.75 0 0 0 416 256a94.76 94.76 0 0 0-121.31-92.21A47.65 47.65 0 0 1 304 192a46.64 46.64 0 0 1-1.54 10l-73.61-56.89A142.31 142.31 0 0 1 320 112a143.92 143.92 0 0 1 144 144c0 21.63-5.29 41.79-13.9 60.11z"
+                        ></path>
+                      </svg>
+                    ) : (
+                      <svg
+                        className="h-6 w-6 text-gray-500"
+                        fill="none"
+                        xmlns="http://www.w3.org/2000/svg"
+                        viewBox="0 0 576 512"
+                      >
+                        <path
+                          fill="currentColor"
+                          d="M572.52 241.4C518.29 135.59 410.93 64 288 64S57.68 135.64 3.48 241.41a32.35 32.35 0 0 0 0 29.19C57.71 376.41 165.07 448 288 448s230.32-71.64 284.52-177.41a32.35 32.35 0 0 0 0-29.19zM288 400a144 144 0 1 1 144-144 143.93 143.93 0 0 1-144 144zm0-240a95.31 95.31 0 0 0-25.31 3.79 47.85 47.85 0 0 1-66.9 66.9A95.78 95.78 0 1 0 288 160z"
+                        ></path>
+                      </svg>
+                    )}
+                  </button>
+                </div>
+              </div>
+              <PasswordStrengthMeter password={credentials.password} />
+              <div>
+                <label
+                  htmlFor="cpassword"
+                  className="block text-sm font-medium text-[#6494b4] mb-1"
+                >
+                  Confirm Password
+                </label>
+                <div className="relative">
+                  <input
+                    type={showCPassword ? "text" : "password"}
+                    id="cpassword"
+                    name="cpassword"
+                    value={credentials.cpassword}
+                    onChange={onChange}
+                    required
+                    minLength={5}
+                    className="w-full px-4 py-3 bg-gray-50 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#6494b4] focus:border-transparent transition duration-300"
+                    placeholder="Confirm your password"
+                  />
+                  <button
+                    type="button"
+                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-sm leading-5"
+                    onClick={() => setShowCPassword(!showCPassword)}
+                  >
+                    {showCPassword ? (
+                      <svg
+                        className="h-6 w-6 text-gray-500"
+                        fill="none"
+                        xmlns="http://www.w3.org/2000/svg"
+                        viewBox="0 0 640 512"
+                      >
+                        <path
+                          fill="currentColor"
+                          d="M320 400c-75.85 0-137.25-58.71-142.9-133.11L72.2 185.82c-13.79 17.3-26.48 35.59-36.72 55.59a32.35 32.35 0 0 0 0 29.19C89.71 376.41 197.07 448 320 448c26.91 0 52.87-4 77.89-10.46L346 397.39a144.13 144.13 0 0 1-26 2.61zm313.82 58.1l-110.55-85.44a331.25 331.25 0 0 0 81.25-102.07 32.35 32.35 0 0 0 0-29.19C550.29 135.59 442.93 64 320 64a308.15 308.15 0 0 0-147.32 37.7L45.46 3.37A16 16 0 0 0 23 6.18L3.37 31.45A16 16 0 0 0 6.18 53.9l588.36 454.73a16 16 0 0 0 22.46-2.81l19.64-25.27a16 16 0 0 0-2.82-22.45zm-183.72-142l-39.3-30.38A94.75 94.75 0 0 0 416 256a94.76 94.76 0 0 0-121.31-92.21A47.65 47.65 0 0 1 304 192a46.64 46.64 0 0 1-1.54 10l-73.61-56.89A142.31 142.31 0 0 1 320 112a143.92 143.92 0 0 1 144 144c0 21.63-5.29 41.79-13.9 60.11z"
+                        ></path>
+                      </svg>
+                    ) : (
+                      <svg
+                        className="h-6 w-6 text-gray-500"
+                        fill="none"
+                        xmlns="http://www.w3.org/2000/svg"
+                        viewBox="0 0 576 512"
+                      >
+                        <path
+                          fill="currentColor"
+                          d="M572.52 241.4C518.29 135.59 410.93 64 288 64S57.68 135.64 3.48 241.41a32.35 32.35 0 0 0 0 29.19C57.71 376.41 165.07 448 288 448s230.32-71.64 284.52-177.41a32.35 32.35 0 0 0 0-29.19zM288 400a144 144 0 1 1 144-144 143.93 143.93 0 0 1-144 144zm0-240a95.31 95.31 0 0 0-25.31 3.79 47.85 47.85 0 0 1-66.9 66.9A95.78 95.78 0 1 0 288 160z"
+                        ></path>
+                      </svg>
+                    )}
+                  </button>
+                </div>
+              </div>
+              <div className="flex items-center">
+                <input
+                  id="terms"
+                  name="terms"
+                  type="checkbox"
+                  className="h-4 w-4 text-[#6494b4] focus:ring-[#6494b4] border-gray-300 rounded"
+                  required
+                />
+                <label
+                  htmlFor="terms"
+                  className="ml-2 block text-sm text-[#567c92]"
+                >
+                  I agree to the{" "}
+                  <a href="#" className="text-[#6494b4] hover:underline">
+                    Terms and Conditions
+                  </a>
+                </label>
+              </div>
+              <div className="flex justify-between">
+                <button
+                  type="button"
+                  onClick={() => setStep(2)}
+                  className="bg-gray-300 text-gray-700 py-2 px-4 rounded-md hover:bg-gray-400 transition duration-300 shadow-md text-lg font-semibold"
+                >
+                  Back
+                </button>
+                <button
+                  type="submit"
+                  className="bg-[#6494b4] text-white py-2 px-4 rounded-md hover:bg-[#567c92] transition duration-300 shadow-md text-lg font-semibold"
+                >
+                  Create Account
+                </button>
+              </div>
+            </form>
+          </>
+        );
+      case 4:
+        return (
+          <>
+            <h4 className="text-2xl text-[#567c92] text-center mb-8">
+              Step 4: Verify Email
+            </h4>
+            <form onSubmit={handleVerifyEmail} className="space-y-4">
+              <div>
+                <label
+                  htmlFor="emailOtp"
+                  className="block text-sm font-medium text-[#6494b4] mb-1"
+                >
+                  Email OTP
+                </label>
+                <input
+                  type="text"
+                  id="emailOtp"
+                  name="emailOtp"
+                  value={emailOtp}
+                  onChange={(e) => setEmailOtp(e.target.value)}
+                  required
+                  className="w-full px-4 py-3 bg-gray-50 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#6494b4] focus:border-transparent transition duration-300"
+                  placeholder="Enter Email OTP"
+                />
+              </div>
+              <button
+                type="submit"
+                className="w-full bg-[#6494b4] text-white py-3 px-4 rounded-md hover:bg-[#567c92] transition duration-300 shadow-md text-lg font-semibold"
+              >
+                Verify Email
+              </button>
+            </form>
+          </>
+        );
+      case 5:
+        return (
+          <>
+            <h4 className="text-2xl text-[#567c92] text-center mb-8">
+              Step 5: Verify Phone
+            </h4>
+            <form onSubmit={handleVerifyPhone} className="space-y-4">
+              <div>
+                <label
+                  htmlFor="phoneOtp"
+                  className="block text-sm font-medium text-[#6494b4] mb-1"
+                >
+                  Phone OTP
+                </label>
+                <input
+                  type="text"
+                  id="phoneOtp"
+                  name="phoneOtp"
+                  value={phoneOtp}
+                  onChange={(e) => setPhoneOtp(e.target.value)}
+                  required
+                  className="w-full px-4 py-3 bg-gray-50 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#6494b4] focus:border-transparent transition duration-300"
+                  placeholder="Enter Phone OTP"
+                />
+              </div>
+              <button
+                type="submit"
+                className="w-full bg-[#6494b4] text-white py-3 px-4 rounded-md hover:bg-[#567c92] transition duration-300 shadow-md text-lg font-semibold"
+              >
+                Verify Phone
+              </button>
+            </form>
+          </>
+        );
+      default:
+        return null;
+    }
   };
 
   return (
@@ -191,206 +563,7 @@ const Signup = ({ showAlert }) => {
               <img src={img} alt="I-Memory Logo" className="h-12 mr-3" />
               <h3 className="text-3xl font-bold text-[#6494b4]">I-Memory</h3>
             </div>
-            <h4 className="text-2xl text-[#567c92] text-center mb-8">
-              {otpSent ? "Verify Your Email" : "Create your account"}
-            </h4>
-            {!otpSent ? (
-              <form onSubmit={handleSubmit} className="space-y-6">
-                <div>
-                  <label
-                    htmlFor="name"
-                    className="block text-sm font-medium text-[#6494b4] mb-1"
-                  >
-                    Full Name
-                  </label>
-                  <input
-                    type="text"
-                    id="name"
-                    name="name"
-                    value={credentials.name}
-                    onChange={onChange}
-                    required
-                    className="w-full px-4 py-3 bg-gray-50 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#6494b4] focus:border-transparent transition duration-300"
-                    placeholder="Enter your full name"
-                  />
-                </div>
-                <div>
-                  <label
-                    htmlFor="email"
-                    className="block text-sm font-medium text-[#6494b4] mb-1"
-                  >
-                    Email address
-                  </label>
-                  <input
-                    type="email"
-                    id="email"
-                    name="email"
-                    value={credentials.email}
-                    onChange={onChange}
-                    required
-                    className="w-full px-4 py-3 bg-gray-50 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#6494b4] focus:border-transparent transition duration-300"
-                    placeholder="Enter your email"
-                  />
-                </div>
-                <div>
-                  <label
-                    htmlFor="password"
-                    className="block text-sm font-medium text-[#6494b4] mb-1"
-                  >
-                    Password
-                  </label>
-                  <div className="relative">
-                    <input
-                      type={showPassword ? "text" : "password"}
-                      id="password"
-                      name="password"
-                      value={credentials.password}
-                      onChange={onChange}
-                      required
-                      minLength={5}
-                      className="w-full px-4 py-3 bg-gray-50 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#6494b4] focus:border-transparent transition duration-300"
-                      placeholder="Create a password"
-                    />
-                    <button
-                      type="button"
-                      className="absolute inset-y-0 right-0 pr-3 flex items-center text-sm leading-5"
-                      onClick={() => setShowPassword(!showPassword)}
-                    >
-                      {showPassword ? (
-                        <svg
-                          className="h-6 w-6 text-gray-500"
-                          fill="none"
-                          xmlns="http://www.w3.org/2000/svg"
-                          viewBox="0 0 640 512"
-                        >
-                          <path
-                            fill="currentColor"
-                            d="M320 400c-75.85 0-137.25-58.71-142.9-133.11L72.2 185.82c-13.79 17.3-26.48 35.59-36.72 55.59a32.35 32.35 0 0 0 0 29.19C89.71 376.41 197.07 448 320 448c26.91 0 52.87-4 77.89-10.46L346 397.39a144.13 144.13 0 0 1-26 2.61zm313.82 58.1l-110.55-85.44a331.25 331.25 0 0 0 81.25-102.07 32.35 32.35 0 0 0 0-29.19C550.29 135.59 442.93 64 320 64a308.15 308.15 0 0 0-147.32 37.7L45.46 3.37A16 16 0 0 0 23 6.18L3.37 31.45A16 16 0 0 0 6.18 53.9l588.36 454.73a16 16 0 0 0 22.46-2.81l19.64-25.27a16 16 0 0 0-2.82-22.45zm-183.72-142l-39.3-30.38A94.75 94.75 0 0 0 416 256a94.76 94.76 0 0 0-121.31-92.21A47.65 47.65 0 0 1 304 192a46.64 46.64 0 0 1-1.54 10l-73.61-56.89A142.31 142.31 0 0 1 320 112a143.92 143.92 0 0 1 144 144c0 21.63-5.29 41.79-13.9 60.11z"
-                          ></path>
-                        </svg>
-                      ) : (
-                        <svg
-                          className="h-6 w-6 text-gray-500"
-                          fill="none"
-                          xmlns="http://www.w3.org/2000/svg"
-                          viewBox="0 0 576 512"
-                        >
-                          <path
-                              fill="currentColor"
-      d="M572.52 241.4C518.29 135.59 410.93 64 288 64S57.68 135.64 3.48 241.41a32.35 32.35 0 0 0 0 29.19C57.71 376.41 165.07 448 288 448s230.32-71.64 284.52-177.41a32.35 32.35 0 0 0 0-29.19zM288 400a144 144 0 1 1 144-144 143.93 143.93 0 0 1-144 144zm0-240a95.31 95.31 0 0 0-25.31 3.79 47.85 47.85 0 0 1-66.9 66.9A95.78 95.78 0 1 0 288 160z"
-                          ></path>
-                        </svg>
-                      )}
-                    </button>
-                  </div>
-                </div>
-                <PasswordStrengthMeter password={credentials.password} />
-                <div>
-                  <label
-                    htmlFor="cpassword"
-                    className="block text-sm font-medium text-[#6494b4] mb-1"
-                  >
-                    Confirm Password
-                  </label>
-                  <div className="relative">
-                    <input
-                      type={showCPassword ? "text" : "password"}
-                      id="cpassword"
-                      name="cpassword"
-                      value={credentials.cpassword}
-                      onChange={onChange}
-                      required
-                      minLength={5}
-                      className="w-full px-4 py-3 bg-gray-50 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#6494b4] focus:border-transparent transition duration-300"
-                      placeholder="Confirm your password"
-                    />
-                    <button
-                      type="button"
-                      className="absolute inset-y-0 right-0 pr-3 flex items-center text-sm leading-5"
-                      onClick={() => setShowCPassword(!showCPassword)}
-                    >
-                      {showCPassword ? (
-                        <svg
-                          className="h-6 w-6 text-gray-500"
-                          fill="none"
-                          xmlns="http://www.w3.org/2000/svg"
-                          viewBox="0 0 640 512"
-                        >
-                          <path
-                            fill="currentColor"
-                            d="M320 400c-75.85 0-137.25-58.71-142.9-133.11L72.2 185.82c-13.79 17.3-26.48 35.59-36.72 55.59a32.35 32.35 0 0 0 0 29.19C89.71 376.41 197.07 448 320 448c26.91 0 52.87-4 77.89-10.46L346 397.39a144.13 144.13 0 0 1-26 2.61zm313.82 58.1l-110.55-85.44a331.25 331.25 0 0 0 81.25-102.07 32.35 32.35 0 0 0 0-29.19C550.29 135.59 442.93 64 320 64a308.15 308.15 0 0 0-147.32 37.7L45.46 3.37A16 16 0 0 0 23 6.18L3.37 31.45A16 16 0 0 0 6.18 53.9l588.36 454.73a16 16 0 0 0 22.46-2.81l19.64-25.27a16 16 0 0 0-2.82-22.45zm-183.72-142l-39.3-30.38A94.75 94.75 0 0 0 416 256a94.76 94.76 0 0 0-121.31-92.21A47.65 47.65 0 0 1 304 192a46.64 46.64 0 0 1-1.54 10l-73.61-56.89A142.31 142.31 0 0 1 320 112a143.92 143.92 0 0 1 144 144c0 21.63-5.29 41.79-13.9 60.11z"
-                          ></path>
-                        </svg>
-                      ) : (
-                        <svg
-                          className="h-6 w-6 text-gray-500"
-                          fill="none"
-                          xmlns="http://www.w3.org/2000/svg"
-                          viewBox="0 0 576 512"
-                        >
-                          <path
-                            fill="currentColor"
-                            d="M572.52 241.4C518.29 135.59 410.93 64 288 64S57.68 135.64 3.48 241.41a32.35 32.35 0 0 0 0 29.19C57.71 376.41 165.07 448 288 448s230.32-71.64 284.52-177.41a32.35 32.35 0 0 0 0-29.19zM288 400a144 144 0 1 1 144-144 143.93 143.93 0 0 1-144 144zm0-240a95.31 95.31 0 0 0-25.31 3.79 47.85 47.85 0 0 1-66.9 66.9A95.78 95.78 0 1 0 288 160z"
-                          ></path>
-                        </svg>
-                      )}
-                    </button>
-                  </div>
-                </div>
-                
-                <div className="flex items-center">
-                  <input
-                    id="terms"
-                    name="terms"
-                    type="checkbox"
-                    className="h-4 w-4 text-[#6494b4] focus:ring-[#6494b4] border-gray-300 rounded"
-                    required
-                  />
-                  <label
-                    htmlFor="terms"
-                    className="ml-2 block text-sm text-[#567c92]"
-                  >
-                    I agree to the{" "}
-                    <a href="#" className="text-[#6494b4] hover:underline">
-                      Terms and Conditions
-                    </a>
-                  </label>
-                </div>
-                <button
-                  type="submit"
-                  className="w-full bg-[#6494b4] text-white py-3 px-4 rounded-md hover:bg-[#567c92] transition duration-300 shadow-md text-lg font-semibold"
-                >
-                  Create Account
-                </button>
-              </form>
-            ) : (
-              <form onSubmit={handleVerifyOTP} className="space-y-6">
-                <div>
-                  <label
-                    htmlFor="otp"
-                    className="block text-sm font-medium text-[#6494b4] mb-1"
-                  >
-                    Enter OTP
-                  </label>
-                  <input
-                    type="text"
-                    id="otp"
-                    name="otp"
-                    value={otp}
-                    onChange={(e) => setOtp(e.target.value)}
-                    required
-                    className="w-full px-4 py-3 bg-gray-50 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#6494b4] focus:border-transparent transition duration-300"
-                    placeholder="Enter 6-digit OTP"
-                  />
-                </div>
-                <button
-                  type="submit"
-                  className="w-full bg-[#6494b4] text-white py-3 px-4 rounded-md hover:bg-[#567c92] transition duration-300 shadow-md text-lg font-semibold"
-                >
-                  Verify OTP
-                </button>
-              </form>
-            )}
+            {renderStep()}
             {otpSent && (
               <div className="mt-4 text-center">
                 {countdown > 0 ? (
@@ -400,12 +573,20 @@ const Signup = ({ showAlert }) => {
                     {countdown % 60}
                   </p>
                 ) : (
-                  <button
-                    onClick={handleResendOTP}
-                    className="text-[#6494b4] hover:underline"
-                  >
-                    Resend OTP
-                  </button>
+                  <div>
+                    <button
+                      onClick={() => handleResendOTP("email")}
+                      className="text-[#6494b4] hover:underline mr-4"
+                    >
+                      Resend Email OTP
+                    </button>
+                    <button
+                      onClick={() => handleResendOTP("phone")}
+                      className="text-[#6494b4] hover:underline"
+                    >
+                      Resend Phone OTP
+                    </button>
+                  </div>
                 )}
               </div>
             )}
@@ -425,5 +606,7 @@ const Signup = ({ showAlert }) => {
     </div>
   );
 };
+
+
 
 export default Signup;
