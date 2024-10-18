@@ -31,6 +31,7 @@ const createAccountLimiter = rateLimit({
   max: 5, // start blocking after 5 requests
   message:
     "Too many accounts created from this IP, please try again after an hour",
+  statusCode: 429,
 });
 
 const otpLimiter = rateLimit({
@@ -38,6 +39,7 @@ const otpLimiter = rateLimit({
   max: 5, // start blocking after 5 requests
   message:
     "Too many OTP requests from this IP, please try again after 15 minutes",
+  statusCode: 429,
 });
 
 // Generate OTP
@@ -72,10 +74,12 @@ async function sendSMS(phoneNumber, message) {
 
   try {
     const command = new PublishCommand(params);
-    await snsClient.send(command);
-    console.log("SMS sent successfully");
+    const response = await snsClient.send(command);
+    console.log("SMS sent successfully", response);
+    return response;
   } catch (error) {
     console.error("Error sending SMS:", error);
+    console.error("Error details:", JSON.stringify(error, null, 2));
     throw error;
   }
 }
@@ -246,11 +250,10 @@ router.post(
       await user.save();
 
       if (user.isEmailVerified && user.isPhoneVerified) {
-        const authToken = jwt.sign({ user: { id: user.id } }, JWT_SECRET);
         return res.json({
           success: true,
-          authToken,
           message: "Phone verified successfully. You can now log in.",
+          isFullyVerified: true,
         });
       }
 
@@ -268,6 +271,7 @@ router.post(
   [
     body("email", "Enter a Valid Email").isEmail(),
     body("password", "Password Cannot be blank").exists(),
+    body("captchaToken", "CAPTCHA token is required").notEmpty(),
   ],
   async (req, res) => {
     let success = false;
@@ -276,8 +280,14 @@ router.post(
       return res.status(400).json({ success, errors: errors.array() });
     }
 
-    const { email, password } = req.body;
+    const { email, password, rememberMe } = req.body;
     try {
+      // Verify CAPTCHA
+      const captchaVerified = await verifyCaptcha(req.body.captchaToken);
+      if (!captchaVerified) {
+        return res.status(400).json({ error: "CAPTCHA verification failed" });
+      }
+
       let user = await User.findOne({ email });
       if (!user) {
         return res
@@ -301,9 +311,13 @@ router.post(
       }
 
       const data = { user: { id: user.id } };
-      const authToken = jwt.sign(data, JWT_SECRET);
+      const tokenExpiration = rememberMe ? "30d" : "1d"; // 30 days if remember me, else 1 day
+      const authToken = jwt.sign(data, JWT_SECRET, {
+        expiresIn: tokenExpiration,
+      });
+
       success = true;
-      res.json({ success, authToken });
+      res.json({ success, authToken, expiresIn: tokenExpiration });
     } catch (error) {
       console.log(error.message);
       res.status(500).json({ error: "Internal Server error" });
@@ -390,7 +404,9 @@ router.post(
       // Verify CAPTCHA
       const captchaVerified = await verifyCaptcha(req.body.captchaToken);
       if (!captchaVerified) {
-        return res.status(400).json({ error: "CAPTCHA verification failed" });
+        return res
+          .status(400)
+          .json({ error: "CAPTCHA verification failed. Please try again." });
       }
 
       const { email, otp, newPassword } = req.body;
@@ -518,5 +534,20 @@ router.post("/opt-out-sms", fetchuser, async (req, res) => {
     res.status(500).json({ error: "Internal Server error" });
   }
 });
+
+// ROUTE 9: Get user details
+router.get("/getuser", fetchuser, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const user = await User.findById(userId).select("-password");
+    res.send(user);
+  } catch (error) {
+    console.error(error.message);
+    res.status(500).send("Internal Server Error");
+  }
+});
+
+
+
 
 module.exports = router;

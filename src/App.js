@@ -1,81 +1,35 @@
-import React from "react";
-import {
-  BrowserRouter as Router,
-  Route,
-  Routes,
-  Navigate,
-} from "react-router-dom";
-import Navbar from "./components/Navbar";
+import React, { useState } from "react";
+import { BrowserRouter as Router, Route, Routes } from "react-router-dom";
 import Home from "./components/Home";
 import About from "./components/About";
 import Login from "./components/Login";
 import Signup from "./components/Signup";
-// import Alert from "./components/Alert";
 import NoteState from "./context/notes/NoteState";
-import { useState } from "react";
 import ForgotPassword from "./components/ForgotPassword";
 import ResetPassword from "./components/ResetPassword";
 import { ToastContainer, toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import "./toastify-config.css";
 import NotFound from "./components/NotFound";
-import { GoogleReCaptchaProvider } from "react-google-recaptcha-v3";
-
-
-
-// Layout components
-const MainLayout = ({ children }) => (
-  <>
-    <Navbar />
-    {children}
-  </>
-);
-
-const AuthLayout = ({ children }) => (
-  <div className="auth-layout">{children}</div>
-);
-
-// Protected Route component
-const ProtectedRoute = ({ children }) => {
-  const isAuthenticated = localStorage.getItem("authToken");
-  return isAuthenticated ? children : <Navigate to="/login" />;
-};
-
-// Guest Route component
-const GuestRoute = ({ children }) => {
-  const isAuthenticated = localStorage.getItem("authToken");
-  return !isAuthenticated ? children : <Navigate to="/" />;
-};
-
-const ReCaptchaWrapper = ({ children }) => (
-  <GoogleReCaptchaProvider
-    reCaptchaKey={"6Lc_N2QqAAAAALCAfUeIdTCaWLpbULXvme-jqaK8"}
-    scriptProps={{
-      async: false,
-      defer: false,
-      appendTo: "head",
-      nonce: undefined,
-    }}
-  >
-    {children}
-  </GoogleReCaptchaProvider>
-);
+import { ReCaptchaWrapper } from "./components/ReCaptchaWrapper";
+import { MainLayout } from "./layouts/MainLayout";
+import { AuthLayout } from "./layouts/AuthLayout";
+import { ProtectedRoute } from "./Routes/ProtectedRoutes";
+import { GuestRoute } from "./Routes/GuestRoutes";
 
 function App() {
-
-
-   const showAlert = (message, type) => {
-     switch (type) {
-       case "success":
-         toast.success(message);
-         break;
-       case "error":
-         toast.error(message);
-         break;
-       default:
-         toast.info(message);
-     }
-   };
+  const showAlert = (message, type) => {
+    switch (type) {
+      case "success":
+        toast.success(message);
+        break;
+      case "error":
+        toast.error(message);
+        break;
+      default:
+        toast.info(message);
+    }
+  };
 
   return (
     <Router>
@@ -93,16 +47,6 @@ function App() {
               </ProtectedRoute>
             }
           />
-          <Route
-            path="/about"
-            element={
-              <ProtectedRoute>
-                <MainLayout>
-                  <About />
-                </MainLayout>
-              </ProtectedRoute>
-            }
-          />
 
           {/* Guest Routes */}
           <Route
@@ -110,7 +54,9 @@ function App() {
             element={
               <GuestRoute>
                 <AuthLayout>
-                  <Login showAlert={showAlert} />
+                  <ReCaptchaWrapper>
+                    <Login showAlert={showAlert} />
+                  </ReCaptchaWrapper>
                 </AuthLayout>
               </GuestRoute>
             }

@@ -8,6 +8,7 @@ const ForgotPassword = ({ showAlert }) => {
   const { executeRecaptcha } = useGoogleReCaptcha();
   const [email, setEmail] = useState("");
   const [otpSent, setOtpSent] = useState(false);
+  const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -16,13 +17,14 @@ const ForgotPassword = ({ showAlert }) => {
       return;
     }
 
-    const token = await executeRecaptcha("forgotPassword");
-    if (!token) {
-      showAlert("reCAPTCHA verification failed", "error");
-      return;
-    }
-
+    setLoading(true);
     try {
+      const token = await executeRecaptcha("forgotPassword");
+      if (!token) {
+        showAlert("reCAPTCHA verification failed. Please try again.", "error");
+        return;
+      }
+
       const response = await fetch(
         "http://localhost:5000/api/auth/forgot-password",
         {
@@ -35,14 +37,16 @@ const ForgotPassword = ({ showAlert }) => {
       if (json.message) {
         setOtpSent(true);
         showAlert(
-          "OTP sent to your email and phone (if enabled). Please check.",
+          "OTP sent to your email and phone (if enabled). Please check your inbox and messages.",
           "success"
         );
-      } else {
+      }else {
         showAlert(json.error, "error");
       }
     } catch (error) {
       showAlert("An error occurred. Please try again.", "error");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -79,8 +83,9 @@ const ForgotPassword = ({ showAlert }) => {
             <button
               type="submit"
               className="w-full bg-[#6494b4] text-white py-3 px-4 rounded-md hover:bg-[#567c92] transition duration-300 shadow-md text-lg font-semibold"
+              disabled={loading}
             >
-              Send Reset OTP
+              {loading ? "Sending..." : "Send Reset OTP"}
             </button>
           </form>
         ) : (
@@ -90,7 +95,9 @@ const ForgotPassword = ({ showAlert }) => {
               to reset your password.
             </p>
             <button
-              onClick={() => navigate("/reset-password")}
+              onClick={() =>
+                navigate("/reset-password", { state: { email: email } })
+              }
               className="w-full bg-[#6494b4] text-white py-3 px-4 rounded-md hover:bg-[#567c92] transition duration-300 shadow-md text-lg font-semibold"
             >
               Reset Password

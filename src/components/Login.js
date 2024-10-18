@@ -1,23 +1,41 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import img from "../assets/Circle-icons-cloud.svg.png";
+import { useGoogleReCaptcha } from "react-google-recaptcha-v3";
 
 const Login = ({ showAlert }) => {
   const navigate = useNavigate();
   const [credentials, setCredentials] = useState({ email: "", password: "" });
   const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [rememberMe, setRememberMe] = useState(false);
+  const { executeRecaptcha } = useGoogleReCaptcha();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!executeRecaptcha) {
+      console.log("Execute recaptcha not yet available");
+      return;
+    }
+    setLoading(true);
     try {
+      const captchaToken = await executeRecaptcha("login");
       const response = await fetch("http://localhost:5000/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(credentials),
+        body: JSON.stringify({ ...credentials, rememberMe, captchaToken }),
       });
       const json = await response.json();
       if (json.success) {
         localStorage.setItem("authToken", json.authToken);
+        if (rememberMe) {
+          const expirationDate = new Date(
+            Date.now() + 30 * 24 * 60 * 60 * 1000
+          ); // 30 days
+          localStorage.setItem("tokenExpiration", expirationDate.toISOString());
+        } else {
+          localStorage.removeItem("tokenExpiration");
+        }
         showAlert("Logged in Successfully", "success");
         navigate("/");
       } else {
@@ -25,6 +43,8 @@ const Login = ({ showAlert }) => {
       }
     } catch (error) {
       showAlert("An error occurred. Please try again.", "error");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -188,15 +208,20 @@ const Login = ({ showAlert }) => {
                   </button>
                 </div>
               </div>
-            <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between">
                 <div className="flex items-center">
                   <input
                     id="remember-me"
                     name="remember-me"
                     type="checkbox"
+                    checked={rememberMe}
+                    onChange={(e) => setRememberMe(e.target.checked)}
                     className="h-4 w-4 text-[#6494b4] focus:ring-[#6494b4] border-gray-300 rounded"
                   />
-                  <label htmlFor="remember-me" className="ml-2 block text-sm text-[#567c92]">
+                  <label
+                    htmlFor="remember-me"
+                    className="ml-2 block text-sm text-[#567c92]"
+                  >
                     Remember me
                   </label>
                 </div>
@@ -213,8 +238,9 @@ const Login = ({ showAlert }) => {
               <button
                 type="submit"
                 className="w-full bg-[#6494b4] text-white py-3 px-4 rounded-md hover:bg-[#567c92] transition duration-300 shadow-md text-lg font-semibold"
+                disabled={loading}
               >
-                Sign in
+                {loading ? "Logging in..." : "Sign in"}
               </button>
             </form>
             <p className="mt-8 text-center text-sm text-[#567c92]">

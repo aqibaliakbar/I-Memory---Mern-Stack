@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { useGoogleReCaptcha } from 'react-google-recaptcha-v3';
+import { useGoogleReCaptcha } from "react-google-recaptcha-v3";
 import img from "../assets/Circle-icons-cloud.svg.png";
 import PasswordStrengthMeter from "./PasswordStrengthMeter";
+import { RiShieldUserFill } from "react-icons/ri";
 
 const Signup = ({ showAlert }) => {
   const navigate = useNavigate();
@@ -23,6 +24,8 @@ const Signup = ({ showAlert }) => {
   const [emailVerified, setEmailVerified] = useState(false);
   const [phoneVerified, setPhoneVerified] = useState(false);
   const [countdown, setCountdown] = useState(0);
+  const [loading, setLoading] = useState(false);
+  const [smsEnabled, setSmsEnabled] = useState(true);
 
   useEffect(() => {
     if (countdown > 0) {
@@ -42,13 +45,14 @@ const Signup = ({ showAlert }) => {
       return;
     }
 
-    const token = await executeRecaptcha("signup");
-    if (!token) {
-      showAlert("reCAPTCHA verification failed", "error");
-      return;
-    }
-
+    setLoading(true);
     try {
+      const token = await executeRecaptcha("signup");
+      if (!token) {
+        showAlert("reCAPTCHA verification failed", "error");
+        return;
+      }
+
       const response = await fetch(
         "http://localhost:5000/api/auth/createuser",
         {
@@ -59,6 +63,7 @@ const Signup = ({ showAlert }) => {
             email: credentials.email,
             phoneNumber: credentials.phoneNumber,
             password: credentials.password,
+            smsEnabled: smsEnabled,
             captchaToken: token,
           }),
         }
@@ -77,11 +82,14 @@ const Signup = ({ showAlert }) => {
       }
     } catch (error) {
       showAlert("An error occurred. Please try again.", "error");
+    } finally {
+      setLoading(false);
     }
   };
 
   const handleVerifyEmail = async (e) => {
     e.preventDefault();
+    setLoading(true);
     try {
       const response = await fetch(
         "http://localhost:5000/api/auth/verify-email",
@@ -91,21 +99,53 @@ const Signup = ({ showAlert }) => {
           body: JSON.stringify({ email: credentials.email, otp: emailOtp }),
         }
       );
+
+      // Check if the response is not successful
+      if (!response.ok) {
+        if (response.status === 429) {
+          // Custom handling for rate-limiting
+          const errorData = await response.json();
+          showAlert(
+            errorData.message || "Too many requests. Please try again later.",
+            "error"
+          );
+        } else {
+          // Other errors (e.g., validation errors, server errors)
+          const errorData = await response.json();
+          showAlert(
+            errorData.error || "An error occurred. Please try again.",
+            "error"
+          );
+        }
+        return;
+      }
+
+      // If the response is successful, parse the JSON
       const json = await response.json();
       if (json.success) {
         setEmailVerified(true);
         showAlert("Email verified successfully", "success");
-        setStep(5); // Move to phone verification step
+        if (json.isFullyVerified) {
+          navigate("/login");
+        } else if (smsEnabled) {
+          setStep(5); // Move to phone verification step
+        } else {
+          navigate("/login");
+        }
       } else {
         showAlert(json.error, "error");
       }
     } catch (error) {
       showAlert("An error occurred. Please try again.", "error");
+      console.error("Verification error:", error);
+    } finally {
+      setLoading(false);
     }
   };
 
   const handleVerifyPhone = async (e) => {
     e.preventDefault();
+    setLoading(true);
     try {
       const response = await fetch(
         "http://localhost:5000/api/auth/verify-phone",
@@ -118,23 +158,49 @@ const Signup = ({ showAlert }) => {
           }),
         }
       );
+
+      // Check if the response is not successful
+      if (!response.ok) {
+        if (response.status === 429) {
+          // Handle rate-limiting errors
+          const errorData = await response.json();
+          showAlert(
+            errorData.message || "Too many requests. Please try again later.",
+            "error"
+          );
+        } else {
+          // Handle other types of errors
+          const errorData = await response.json();
+          showAlert(
+            errorData.errors?.msg || "An error occurred. Please try again.",
+            "error"
+          );
+        }
+        return;
+      }
+
+      // If the response is successful, parse the JSON
       const json = await response.json();
       if (json.success) {
         setPhoneVerified(true);
         showAlert(json.message, "success");
-        if (json.authToken) {
-          localStorage.setItem("authToken", json.authToken);
-          navigate("/");
-        }
+        navigate("/login");
       } else {
-        showAlert(json.error, "error");
+        showAlert(
+          json.errors?.msg || "Verification failed. Please try again.",
+          "error"
+        );
       }
     } catch (error) {
       showAlert("An error occurred. Please try again.", "error");
+      console.error("Verification error:", error);
+    } finally {
+      setLoading(false);
     }
   };
 
   const handleResendOTP = async (type) => {
+    setLoading(true);
     try {
       const response = await fetch(
         "http://localhost:5000/api/auth/resend-otp",
@@ -143,7 +209,6 @@ const Signup = ({ showAlert }) => {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             email: credentials.email,
-            phoneNumber: credentials.phoneNumber,
             type: type,
           }),
         }
@@ -157,6 +222,8 @@ const Signup = ({ showAlert }) => {
       }
     } catch (error) {
       showAlert("An error occurred. Please try again.", "error");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -242,6 +309,21 @@ const Signup = ({ showAlert }) => {
                   className="w-full px-4 py-3 bg-gray-50 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#6494b4] focus:border-transparent transition duration-300"
                   placeholder="Enter your phone number"
                 />
+              </div>
+              <div className="flex items-center">
+                <input
+                  type="checkbox"
+                  id="smsEnabled"
+                  checked={smsEnabled}
+                  onChange={(e) => setSmsEnabled(e.target.checked)}
+                  className="h-4 w-4 text-[#6494b4] focus:ring-[#6494b4] border-gray-300 rounded"
+                />
+                <label
+                  htmlFor="smsEnabled"
+                  className="ml-2 block text-sm text-[#567c92]"
+                >
+                  Enable SMS notifications
+                </label>
               </div>
               <div className="flex justify-between">
                 <button
@@ -401,8 +483,9 @@ const Signup = ({ showAlert }) => {
                 <button
                   type="submit"
                   className="bg-[#6494b4] text-white py-2 px-4 rounded-md hover:bg-[#567c92] transition duration-300 shadow-md text-lg font-semibold"
+                  disabled={loading}
                 >
-                  Create Account
+                  {loading ? "Creating..." : "Create Account"}
                 </button>
               </div>
             </form>
@@ -427,6 +510,10 @@ const Signup = ({ showAlert }) => {
                   id="emailOtp"
                   name="emailOtp"
                   value={emailOtp}
+                  type="text"
+                  id="emailOtp"
+                  name="emailOtp"
+                  value={emailOtp}
                   onChange={(e) => setEmailOtp(e.target.value)}
                   required
                   className="w-full px-4 py-3 bg-gray-50 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#6494b4] focus:border-transparent transition duration-300"
@@ -436,8 +523,9 @@ const Signup = ({ showAlert }) => {
               <button
                 type="submit"
                 className="w-full bg-[#6494b4] text-white py-3 px-4 rounded-md hover:bg-[#567c92] transition duration-300 shadow-md text-lg font-semibold"
+                disabled={loading}
               >
-                Verify Email
+                {loading ? "Verifying..." : "Verify Email"}
               </button>
             </form>
           </>
@@ -470,8 +558,9 @@ const Signup = ({ showAlert }) => {
               <button
                 type="submit"
                 className="w-full bg-[#6494b4] text-white py-3 px-4 rounded-md hover:bg-[#567c92] transition duration-300 shadow-md text-lg font-semibold"
+                disabled={loading}
               >
-                Verify Phone
+                {loading ? "Verifying..." : "Verify Phone"}
               </button>
             </form>
           </>
@@ -577,15 +666,19 @@ const Signup = ({ showAlert }) => {
                     <button
                       onClick={() => handleResendOTP("email")}
                       className="text-[#6494b4] hover:underline mr-4"
+                      disabled={loading}
                     >
                       Resend Email OTP
                     </button>
-                    <button
-                      onClick={() => handleResendOTP("phone")}
-                      className="text-[#6494b4] hover:underline"
-                    >
-                      Resend Phone OTP
-                    </button>
+                    {smsEnabled && (
+                      <button
+                        onClick={() => handleResendOTP("phone")}
+                        className="text-[#6494b4] hover:underline"
+                        disabled={loading}
+                      >
+                        Resend Phone OTP
+                      </button>
+                    )}
                   </div>
                 )}
               </div>
@@ -606,7 +699,5 @@ const Signup = ({ showAlert }) => {
     </div>
   );
 };
-
-
 
 export default Signup;

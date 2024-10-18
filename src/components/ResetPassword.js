@@ -1,64 +1,117 @@
-import React, { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import React, { useState, useEffect } from "react";
+import { useNavigate, useLocation } from "react-router-dom";
 import { useGoogleReCaptcha } from "react-google-recaptcha-v3";
 import img from "../assets/Circle-icons-cloud.svg.png";
 import PasswordStrengthMeter from "./PasswordStrengthMeter";
 
 const ResetPassword = ({ showAlert }) => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { executeRecaptcha } = useGoogleReCaptcha();
   const [credentials, setCredentials] = useState({
-    email: "",
+    email: location.state?.email || "",
     otp: "",
     newPassword: "",
     confirmPassword: "",
   });
   const [showPassword, setShowPassword] = useState(false);
   const [showCPassword, setShowCPassword] = useState(false);
+  const [countdown, setCountdown] = useState(0);
+  const [loading, setLoading] = useState(false);
+  const [resendLoading, setResendLoading] = useState(false);
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (credentials.newPassword !== credentials.confirmPassword) {
-      showAlert("Passwords do not match", "error");
-      return;
+  useEffect(() => {
+    if (countdown > 0) {
+      const timer = setTimeout(() => setCountdown(countdown - 1), 1000);
+      return () => clearTimeout(timer);
     }
-    if (!executeRecaptcha) {
-      console.log("Execute recaptcha not yet available");
-      return;
-    }
+  }, [countdown]);
 
-    try {
-      const token = await executeRecaptcha("resetPassword");
-      if (!token) {
-        showAlert("reCAPTCHA verification failed", "error");
-        return;
-      }
+   const handleSubmit = async (e) => {
+     e.preventDefault();
+     if (credentials.newPassword !== credentials.confirmPassword) {
+       showAlert("Passwords do not match", "error");
+       return;
+     }
+     if (!executeRecaptcha) {
+       console.log("Execute recaptcha not yet available");
+       return;
+     }
 
-      const response = await fetch(
-        "http://localhost:5000/api/auth/reset-password",
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            email: credentials.email,
-            otp: credentials.otp,
-            newPassword: credentials.newPassword,
-            captchaToken: token,
-          }),
-        }
-      );
-      const json = await response.json();
-      if (json.message) {
-        showAlert("Password reset successful", "success");
-        navigate("/login");
-      } else {
+     setLoading(true);
+     try {
+       const token = await executeRecaptcha("resetPassword");
+       if (!token) {
+         showAlert("CAPTCHA verification failed. Please try again.", "error");
+         return;
+       }
+
+       const response = await fetch(
+         "http://localhost:5000/api/auth/reset-password",
+         {
+           method: "POST",
+           headers: { "Content-Type": "application/json" },
+           body: JSON.stringify({
+             email: credentials.email,
+             otp: credentials.otp,
+             newPassword: credentials.newPassword,
+             captchaToken: token,
+           }),
+         }
+       );
+       const json = await response.json();
+       if (json.message) {
+         showAlert(
+           "Password reset successful. You can now log in with your new password.",
+           "success"
+         );
+         navigate("/login");
+       } else {
         showAlert(json.error, "error");
       }
     } catch (error) {
       showAlert("An error occurred. Please try again.", "error");
-    }
-  };
+    } finally {
+       setLoading(false);
+     }
+   };
 
+   const handleResendOTP = async () => {
+     setResendLoading(true);
+     try {
+       const response = await fetch(
+         "http://localhost:5000/api/auth/resend-otp",
+         {
+           method: "POST",
+           headers: { "Content-Type": "application/json" },
+           body: JSON.stringify({
+             email: credentials.email,
+             type: "reset",
+           }),
+         }
+       );
+       const json = await response.json();
+       if (json.message) {
+         setCountdown(600); // 10 minutes
+         showAlert(
+           "New OTP sent. Please check your email and phone (if enabled).",
+           "success"
+         );
+       } else {
+         showAlert(
+           json.error || "Failed to resend OTP. Please try again.",
+           "error"
+         );
+       }
+     } catch (error) {
+       showAlert(
+         "Unable to connect to the server. Please check your internet connection and try again.",
+         "error"
+       );
+     } finally {
+       setResendLoading(false);
+     }
+   };
   const onChange = (e) => {
     setCredentials({ ...credentials, [e.target.name]: e.target.value });
   };
@@ -74,24 +127,6 @@ const ResetPassword = ({ showAlert }) => {
           Reset Password
         </h4>
         <form onSubmit={handleSubmit} className="space-y-6">
-          <div>
-            <label
-              htmlFor="email"
-              className="block text-sm font-medium text-[#6494b4] mb-1"
-            >
-              Email address
-            </label>
-            <input
-              type="email"
-              id="email"
-              name="email"
-              value={credentials.email}
-              onChange={onChange}
-              required
-              className="w-full px-4 py-3 bg-gray-50 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#6494b4] focus:border-transparent transition duration-300"
-              placeholder="Enter your email"
-            />
-          </div>
           <div>
             <label
               htmlFor="otp"
@@ -157,7 +192,7 @@ const ResetPassword = ({ showAlert }) => {
                       d="M572.52 241.4C518.29 135.59 410.93 64 288 64S57.68 135.64 3.48 241.41a32.35 32.35 0 0 0 0 29.19C57.71 376.41 165.07 448 288 448s230.32-71.64 284.52-177.41a32.35 32.35 0 0 0 0-29.19zM288 400a144 144 0 1 1 144-144 143.93 143.93 0 0 1-144 144zm0-240a95.31 95.31 0 0 0-25.31 3.79 47.85 47.85 0 0 1-66.9 66.9A95.78 95.78 0 1 0 288 160z"
                     ></path>
                   </svg>
-                )}{" "}
+                )}
               </button>
             </div>
           </div>
@@ -209,17 +244,35 @@ const ResetPassword = ({ showAlert }) => {
                       d="M572.52 241.4C518.29 135.59 410.93 64 288 64S57.68 135.64 3.48 241.41a32.35 32.35 0 0 0 0 29.19C57.71 376.41 165.07 448 288 448s230.32-71.64 284.52-177.41a32.35 32.35 0 0 0 0-29.19zM288 400a144 144 0 1 1 144-144 143.93 143.93 0 0 1-144 144zm0-240a95.31 95.31 0 0 0-25.31 3.79 47.85 47.85 0 0 1-66.9 66.9A95.78 95.78 0 1 0 288 160z"
                     ></path>
                   </svg>
-                )}{" "}
+                )}
               </button>
             </div>
           </div>
           <button
             type="submit"
             className="w-full bg-[#6494b4] text-white py-3 px-4 rounded-md hover:bg-[#567c92] transition duration-300 shadow-md text-lg font-semibold"
+            disabled={loading}
           >
-            Reset Password
+            {loading ? "Resetting..." : "Reset Password"}
           </button>
         </form>
+        <div className="mt-4 text-center">
+          {countdown > 0 ? (
+            <p className="text-[#567c92]">
+              Resend OTP in {Math.floor(countdown / 60)}:
+              {countdown % 60 < 10 ? "0" : ""}
+              {countdown % 60}
+            </p>
+          ) : (
+            <button
+              onClick={handleResendOTP}
+              className="text-[#6494b4] hover:underline"
+              disabled={resendLoading}
+            >
+              {resendLoading ? "Resending..." : "Resend OTP"}
+            </button>
+          )}
+        </div>
         <p className="mt-8 text-center text-sm text-[#567c92]">
           Remember your password?{" "}
           <a
