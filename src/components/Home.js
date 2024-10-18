@@ -4,7 +4,7 @@ import Notes from "./Notes";
 const Home = ({ showAlert }) => {
   return (
     <div className="bg-[#6494b4] min-h-screen">
-      <div className="container mx-auto px-4 py-12">
+      <div className="container mx-auto px-4 py-14">
         <h1 className="text-4xl md:text-5xl font-bold text-white mb-4 text-center">
           Welcome to I-Memory
         </h1>

@@ -652,6 +652,27 @@ const Signup = ({ showAlert }) => {
               <img src={img} alt="I-Memory Logo" className="h-12 mr-3" />
               <h3 className="text-3xl font-bold text-[#6494b4]">I-Memory</h3>
             </div>
+            {/* Step Progress Indicator */}
+            <div className="flex justify-between items-center mb-8">
+              <div className="w-full h-1 bg-gray-300 rounded-full">
+                <div
+                  className={`h-1 bg-[#6494b4] rounded-full`}
+                  style={{ width: `${(step / 5) * 100}%` }}
+                ></div>
+              </div>
+              <div className="flex justify-between w-full">
+                {[1, 2, 3, 4, 5].map((s) => (
+                  <div
+                    key={s}
+                    className={`w-8 h-8 flex items-center justify-center rounded-full text-white ${
+                      step >= s ? "bg-[#6494b4]" : "bg-gray-300"
+                    }`}
+                  >
+                    {s}
+                  </div>
+                ))}
+              </div>
+            </div>
             {renderStep()}
             {otpSent && (
               <div className="mt-4 text-center">

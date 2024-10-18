@@ -3,6 +3,6 @@ import Navbar from "../components/Navbar";
 export const MainLayout = ({ children }) => (
   <>
     <Navbar />
-    {children}
+    <div className="scrollbar-hide ">{children}</div>
   </>
 );

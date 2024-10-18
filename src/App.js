@@ -47,6 +47,16 @@ function App() {
               </ProtectedRoute>
             }
           />
+          <Route
+            path="/about"
+            element={
+              <ProtectedRoute>
+                <MainLayout>
+                  <About showAlert={showAlert} />
+                </MainLayout>
+              </ProtectedRoute>
+            }
+          />
 
           {/* Guest Routes */}
           <Route
