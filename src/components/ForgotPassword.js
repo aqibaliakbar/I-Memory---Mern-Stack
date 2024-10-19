@@ -3,6 +3,8 @@ import { useNavigate } from "react-router-dom";
 import { useGoogleReCaptcha } from "react-google-recaptcha-v3";
 import img from "../assets/Circle-icons-cloud.svg.png";
 
+const baseUrl = process.env.REACT_APP_BASE_URL;
+
 const ForgotPassword = ({ showAlert }) => {
   const navigate = useNavigate();
   const { executeRecaptcha } = useGoogleReCaptcha();
@@ -26,7 +28,7 @@ const ForgotPassword = ({ showAlert }) => {
       }
 
       const response = await fetch(
-        "http://localhost:5000/api/auth/forgot-password",
+          `${baseUrl}/api/auth/forgot-password`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },

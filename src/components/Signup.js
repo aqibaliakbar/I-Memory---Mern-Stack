@@ -3,7 +3,8 @@ import { useNavigate } from "react-router-dom";
 import { useGoogleReCaptcha } from "react-google-recaptcha-v3";
 import img from "../assets/Circle-icons-cloud.svg.png";
 import PasswordStrengthMeter from "./PasswordStrengthMeter";
-import { RiShieldUserFill } from "react-icons/ri";
+
+const baseUrl = process.env.REACT_APP_BASE_URL;
 
 const Signup = ({ showAlert }) => {
   const navigate = useNavigate();
@@ -53,179 +54,190 @@ const Signup = ({ showAlert }) => {
         return;
       }
 
-      const response = await fetch(
-        "http://localhost:5000/api/auth/createuser",
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            name: credentials.name,
-            email: credentials.email,
-            phoneNumber: credentials.phoneNumber,
-            password: credentials.password,
-            smsEnabled: smsEnabled,
-            captchaToken: token,
-          }),
-        }
-      );
+      const response = await fetch(`${baseUrl}/api/auth/createuser`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: credentials.name,
+          email: credentials.email,
+          phoneNumber: credentials.phoneNumber,
+          password: credentials.password,
+          smsEnabled: smsEnabled,
+          captchaToken: token,
+        }),
+      });
+
       const json = await response.json();
-      if (json.success) {
+
+      if (response.ok) {
         setOtpSent(true);
         setCountdown(600); // 10 minutes
         setStep(4); // Move to OTP verification step
         showAlert(
-          "OTPs sent to your email and phone. Please verify.",
+          "OTPs sent to your email and phone(if enabled). Please verify.",
           "success"
         );
       } else {
-        showAlert(json.error, "error");
-      }
-    } catch (error) {
-      showAlert("An error occurred. Please try again.", "error");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleVerifyEmail = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    try {
-      const response = await fetch(
-        "http://localhost:5000/api/auth/verify-email",
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email: credentials.email, otp: emailOtp }),
-        }
-      );
-
-      // Check if the response is not successful
-      if (!response.ok) {
+        // Handle different types of errors
         if (response.status === 429) {
-          // Custom handling for rate-limiting
-          const errorData = await response.json();
           showAlert(
-            errorData.message || "Too many requests. Please try again later.",
+            json.message || "Too many requests. Please try again later.",
             "error"
           );
+        } else if (json.errors && json.errors.length > 0) {
+          json.errors.forEach((error) => {
+            showAlert(`${error.msg} (Field: ${error.path})`, "error");
+          });
         } else {
-          // Other errors (e.g., validation errors, server errors)
-          const errorData = await response.json();
           showAlert(
-            errorData.error || "An error occurred. Please try again.",
+            json.error || "An error occurred. Please try again.",
             "error"
           );
         }
-        return;
-      }
-
-      // If the response is successful, parse the JSON
-      const json = await response.json();
-      if (json.success) {
-        setEmailVerified(true);
-        showAlert("Email verified successfully", "success");
-        if (json.isFullyVerified) {
-          navigate("/login");
-        } else if (smsEnabled) {
-          setStep(5); // Move to phone verification step
-        } else {
-          navigate("/login");
-        }
-      } else {
-        showAlert(json.error, "error");
       }
     } catch (error) {
       showAlert("An error occurred. Please try again.", "error");
-      console.error("Verification error:", error);
+      console.error("Signup error:", error);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleVerifyPhone = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    try {
-      const response = await fetch(
-        "http://localhost:5000/api/auth/verify-phone",
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            phoneNumber: credentials.phoneNumber,
-            otp: phoneOtp,
-          }),
-        }
-      );
+ const handleErrorResponse = (json) => {
+   if (json.errors && Array.isArray(json.errors)) {
+     json.errors.forEach((error) => {
+       showAlert(`${error.msg} (${error.path})`, "error");
+     });
+   } else if (json.error) {
+     showAlert(json.error, "error");
+   } else {
+     showAlert("An error occurred. Please try again.", "error");
+   }
+ };
 
-      // Check if the response is not successful
-      if (!response.ok) {
-        if (response.status === 429) {
-          // Handle rate-limiting errors
-          const errorData = await response.json();
-          showAlert(
-            errorData.message || "Too many requests. Please try again later.",
-            "error"
-          );
-        } else {
-          // Handle other types of errors
-          const errorData = await response.json();
-          showAlert(
-            errorData.errors?.msg || "An error occurred. Please try again.",
-            "error"
-          );
-        }
-        return;
-      }
+ const handleVerifyEmail = async (e) => {
+   e.preventDefault();
+   setLoading(true);
+   try {
+     const response = await fetch(`${baseUrl}/api/auth/verify-email`, {
+       method: "POST",
+       headers: { "Content-Type": "application/json" },
+       body: JSON.stringify({ email: credentials.email, otp: emailOtp }),
+     });
 
-      // If the response is successful, parse the JSON
-      const json = await response.json();
-      if (json.success) {
-        setPhoneVerified(true);
-        showAlert(json.message, "success");
-        navigate("/login");
-      } else {
-        showAlert(
-          json.errors?.msg || "Verification failed. Please try again.",
-          "error"
-        );
-      }
-    } catch (error) {
-      showAlert("An error occurred. Please try again.", "error");
-      console.error("Verification error:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
+     const json = await response.json();
 
-  const handleResendOTP = async (type) => {
-    setLoading(true);
-    try {
-      const response = await fetch(
-        "http://localhost:5000/api/auth/resend-otp",
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            email: credentials.email,
-            type: type,
-          }),
-        }
-      );
-      const json = await response.json();
-      if (json.message) {
-        setCountdown(600);
-        showAlert(`New OTP sent to your ${type}. Please check.`, "success");
-      } else {
-        showAlert(json.error, "error");
-      }
-    } catch (error) {
-      showAlert("An error occurred. Please try again.", "error");
-    } finally {
-      setLoading(false);
-    }
-  };
+     if (response.ok) {
+       if (json.success) {
+         setEmailVerified(true);
+         showAlert("Email verified successfully", "success");
+         if (json.isFullyVerified) {
+           navigate("/login");
+         } else if (smsEnabled) {
+           setStep(5); // Move to phone verification step
+         } else {
+           navigate("/login");
+         }
+       } else {
+         handleErrorResponse(json);
+       }
+     } else {
+       if (response.status === 429) {
+         showAlert(
+           json.message || "Too many requests. Please try again later.",
+           "error"
+         );
+       } else {
+         handleErrorResponse(json);
+       }
+     }
+   } catch (error) {
+     showAlert("An error occurred. Please try again.", "error");
+     console.error("Verification error:", error);
+   } finally {
+     setLoading(false);
+   }
+ };
+
+ const handleVerifyPhone = async (e) => {
+   e.preventDefault();
+   setLoading(true);
+   try {
+     const response = await fetch(`${baseUrl}/api/auth/verify-phone`, {
+       method: "POST",
+       headers: { "Content-Type": "application/json" },
+       body: JSON.stringify({
+         phoneNumber: credentials.phoneNumber,
+         otp: phoneOtp,
+       }),
+     });
+
+     const json = await response.json();
+
+     if (response.ok) {
+       if (json.success) {
+         setPhoneVerified(true);
+         showAlert(json.message, "success");
+         navigate("/login");
+       } else {
+         handleErrorResponse(json);
+       }
+     } else {
+       if (response.status === 429) {
+         showAlert(
+           json.message || "Too many requests. Please try again later.",
+           "error"
+         );
+       } else {
+         handleErrorResponse(json);
+       }
+     }
+   } catch (error) {
+     showAlert("An error occurred. Please try again.", "error");
+     console.error("Verification error:", error);
+   } finally {
+     setLoading(false);
+   }
+ };
+
+ const handleResendOTP = async (type) => {
+   setLoading(true);
+   try {
+     const response = await fetch(`${baseUrl}/api/auth/resend-otp`, {
+       method: "POST",
+       headers: { "Content-Type": "application/json" },
+       body: JSON.stringify({
+         email: credentials.email,
+         type: type,
+       }),
+     });
+
+     const json = await response.json();
+
+     if (response.ok) {
+       if (json.message) {
+         setCountdown(600);
+         showAlert(`New OTP sent to your ${type}. Please check.`, "success");
+       } else {
+         handleErrorResponse(json);
+       }
+     } else {
+       if (response.status === 429) {
+         showAlert(
+           json.message || "Too many requests. Please try again later.",
+           "error"
+         );
+       } else {
+         handleErrorResponse(json);
+       }
+     }
+   } catch (error) {
+     showAlert("An error occurred. Please try again.", "error");
+     console.error("Resend OTP error:", error);
+   } finally {
+     setLoading(false);
+   }
+ };
 
   const onChange = (e) => {
     setCredentials({ ...credentials, [e.target.name]: e.target.value });

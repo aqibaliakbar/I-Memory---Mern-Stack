@@ -2,7 +2,7 @@ import { GoogleReCaptchaProvider } from "react-google-recaptcha-v3";
 
 export const ReCaptchaWrapper = ({ children }) => (
   <GoogleReCaptchaProvider
-    reCaptchaKey={"6Lc_N2QqAAAAALCAfUeIdTCaWLpbULXvme-jqaK8"}
+    reCaptchaKey={process.env.REACT_APP_RECAPTCHA_SITE_KEY}
     scriptProps={{
       async: false,
       defer: false,

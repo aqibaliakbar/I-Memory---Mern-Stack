@@ -4,6 +4,8 @@ import { useGoogleReCaptcha } from "react-google-recaptcha-v3";
 import img from "../assets/Circle-icons-cloud.svg.png";
 import PasswordStrengthMeter from "./PasswordStrengthMeter";
 
+const baseUrl = process.env.REACT_APP_BASE_URL;
+
 const ResetPassword = ({ showAlert }) => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -47,7 +49,7 @@ const ResetPassword = ({ showAlert }) => {
        }
 
        const response = await fetch(
-         "http://localhost:5000/api/auth/reset-password",
+        `${baseUrl}/api/auth/reset-password`,
          {
            method: "POST",
            headers: { "Content-Type": "application/json" },
@@ -80,7 +82,7 @@ const ResetPassword = ({ showAlert }) => {
      setResendLoading(true);
      try {
        const response = await fetch(
-         "http://localhost:5000/api/auth/resend-otp",
+           `${baseUrl}/api/auth/resend-otp`,
          {
            method: "POST",
            headers: { "Content-Type": "application/json" },

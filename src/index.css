@@ -18,7 +18,7 @@ html, body, #root {
   height: 100%;
 }
 
-/* Add padding to account for the fixed navbar */
+/* Add padding to account for the fixed navbar
 body {
-  padding-top: 4rem; /* Adjust this value based on your navbar height */
-}
+  padding-top: 4rem; Adjust this value based on your navbar height
+} */
