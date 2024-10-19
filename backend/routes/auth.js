@@ -10,6 +10,7 @@ const crypto = require("crypto");
 const { SNSClient, PublishCommand } = require("@aws-sdk/client-sns");
 const rateLimit = require("express-rate-limit");
 const axios = require("axios");
+const { isMobilePhone } = require("validator");
 
 const JWT_SECRET = process.env.JWT_SECRET;
 
@@ -107,7 +108,16 @@ router.post(
     body("password", "Password must be at least 5 characters").isLength({
       min: 5,
     }),
-    body("phoneNumber", "Enter a valid phone number").isMobilePhone(),
+    body("phoneNumber").custom((value, { req }) => {
+      if (req.body.smsEnabled && !value) {
+        throw new Error("Phone number is required when SMS is enabled");
+      }
+      if (value && !isMobilePhone(value)) {
+        throw new Error("Enter a valid phone number");
+      }
+      return true;
+    }),
+    body("smsEnabled").isBoolean(),
     body("captchaToken", "CAPTCHA token is required").notEmpty(),
   ],
   async (req, res) => {
@@ -131,29 +141,39 @@ router.post(
         return res.status(400).json({ success, error: "Email already exists" });
       }
 
-      user = await User.findOne({ phoneNumber: req.body.phoneNumber });
-      if (user) {
-        return res
-          .status(400)
-          .json({ success, error: "Phone number already exists" });
+      if (req.body.phoneNumber) {
+        user = await User.findOne({ phoneNumber: req.body.phoneNumber });
+        if (user) {
+          return res
+            .status(400)
+            .json({ success, error: "Phone number already exists" });
+        }
       }
 
       const salt = await bcrypt.genSalt(10);
       const securePassword = await bcrypt.hash(req.body.password, salt);
 
       const emailOTP = generateOTP();
-      const phoneOTP = generateOTP();
+      const phoneOTP = req.body.smsEnabled ? generateOTP() : undefined;
       const otpExpires = Date.now() + 600000; // 10 minutes
 
-      user = await User.create({
+      const userData = {
         name: req.body.name,
         email: req.body.email,
-        phoneNumber: req.body.phoneNumber,
         password: securePassword,
         emailVerificationOTP: emailOTP,
-        phoneVerificationOTP: phoneOTP,
         verificationOTPExpires: otpExpires,
-      });
+        smsNotificationsEnabled: req.body.smsEnabled,
+      };
+
+      if (req.body.phoneNumber) {
+        userData.phoneNumber = req.body.phoneNumber;
+        if (req.body.smsEnabled) {
+          userData.phoneVerificationOTP = phoneOTP;
+        }
+      }
+
+      user = await User.create(userData);
 
       // Send verification email
       await sendEmail(
@@ -162,17 +182,21 @@ router.post(
         `Your email verification OTP is: ${emailOTP}. It will expire in 10 minutes.`
       );
 
-      // Send verification SMS
-      await sendSMS(
-        user.phoneNumber,
-        `Your I-Memory phone verification OTP is: ${phoneOTP}. It will expire in 10 minutes.`
-      );
+      // Send verification SMS only if SMS is enabled and phone number is provided
+      if (req.body.smsEnabled && req.body.phoneNumber) {
+        await sendSMS(
+          user.phoneNumber,
+          `Your I-Memory phone verification OTP is: ${phoneOTP}. It will expire in 10 minutes.`
+        );
+      }
 
       success = true;
       res.json({
         success,
         message:
-          "User created successfully. Please check your email and phone for verification OTPs.",
+          "User created successfully. Please check your email" +
+          (req.body.smsEnabled && req.body.phoneNumber ? " and phone" : "") +
+          " for verification OTP(s).",
       });
     } catch (error) {
       console.log(error.message);

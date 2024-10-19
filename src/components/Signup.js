@@ -41,6 +41,10 @@ const Signup = ({ showAlert }) => {
       showAlert("Passwords do not match", "error");
       return;
     }
+    if (smsEnabled && !credentials.phoneNumber) {
+      showAlert("Phone number is required when SMS is enabled", "error");
+      return;
+    }
     if (!executeRecaptcha) {
       console.log("Execute recaptcha not yet available");
       return;
@@ -54,17 +58,21 @@ const Signup = ({ showAlert }) => {
         return;
       }
 
+      const userData = {
+        name: credentials.name,
+        email: credentials.email,
+        password: credentials.password,
+        smsEnabled: smsEnabled,
+        captchaToken: token,
+      };
+      if (credentials.phoneNumber) {
+        userData.phoneNumber = credentials.phoneNumber;
+      }
+
       const response = await fetch(`${baseUrl}/api/auth/createuser`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: credentials.name,
-          email: credentials.email,
-          phoneNumber: credentials.phoneNumber,
-          password: credentials.password,
-          smsEnabled: smsEnabled,
-          captchaToken: token,
-        }),
+        body: JSON.stringify(userData),
       });
 
       const json = await response.json();
@@ -72,11 +80,18 @@ const Signup = ({ showAlert }) => {
       if (response.ok) {
         setOtpSent(true);
         setCountdown(600); // 10 minutes
-        setStep(4); // Move to OTP verification step
-        showAlert(
-          "OTPs sent to your email and phone(if enabled). Please verify.",
-          "success"
-        );
+        setStep(4); // Move to email OTP verification step
+        if (smsEnabled) {
+          showAlert(
+            "OTPs sent to your email and phone. Please verify.",
+            "success"
+          );
+        } else {
+          showAlert(
+            "OTP sent to your email. Please verify. Note: SMS notifications are not enabled.",
+            "success"
+          );
+        }
       } else {
         // Handle different types of errors
         if (response.status === 429) {
@@ -84,9 +99,12 @@ const Signup = ({ showAlert }) => {
             json.message || "Too many requests. Please try again later.",
             "error"
           );
-        } else if (json.errors && json.errors.length > 0) {
+        } else if (json.errors && Array.isArray(json.errors)) {
           json.errors.forEach((error) => {
-            showAlert(`${error.msg} (Field: ${error.path})`, "error");
+            // Only show phone-related errors if SMS is enabled
+            if (smsEnabled || error.path !== "phoneNumber") {
+              showAlert(`${error.msg} (Field: ${error.path})`, "error");
+            }
           });
         } else {
           showAlert(
@@ -103,141 +121,154 @@ const Signup = ({ showAlert }) => {
     }
   };
 
- const handleErrorResponse = (json) => {
-   if (json.errors && Array.isArray(json.errors)) {
-     json.errors.forEach((error) => {
-       showAlert(`${error.msg} (${error.path})`, "error");
-     });
-   } else if (json.error) {
-     showAlert(json.error, "error");
-   } else {
-     showAlert("An error occurred. Please try again.", "error");
-   }
- };
+  const handleErrorResponse = (json) => {
+    if (json.errors && Array.isArray(json.errors)) {
+      json.errors.forEach((error) => {
+        // Only show phone-related errors if SMS is enabled
+        if (smsEnabled || error.path !== "phoneNumber") {
+          showAlert(`${error.msg} (${error.path})`, "error");
+        }
+      });
+    } else if (json.error) {
+      showAlert(json.error, "error");
+    } else {
+      showAlert("An error occurred. Please try again.", "error");
+    }
+  };
 
- const handleVerifyEmail = async (e) => {
-   e.preventDefault();
-   setLoading(true);
-   try {
-     const response = await fetch(`${baseUrl}/api/auth/verify-email`, {
-       method: "POST",
-       headers: { "Content-Type": "application/json" },
-       body: JSON.stringify({ email: credentials.email, otp: emailOtp }),
-     });
+  const handleVerifyEmail = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      const response = await fetch(`${baseUrl}/api/auth/verify-email`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: credentials.email, otp: emailOtp }),
+      });
 
-     const json = await response.json();
+      const json = await response.json();
 
-     if (response.ok) {
-       if (json.success) {
-         setEmailVerified(true);
-         showAlert("Email verified successfully", "success");
-         if (json.isFullyVerified) {
-           navigate("/login");
-         } else if (smsEnabled) {
-           setStep(5); // Move to phone verification step
-         } else {
-           navigate("/login");
-         }
-       } else {
-         handleErrorResponse(json);
-       }
-     } else {
-       if (response.status === 429) {
-         showAlert(
-           json.message || "Too many requests. Please try again later.",
-           "error"
-         );
-       } else {
-         handleErrorResponse(json);
-       }
-     }
-   } catch (error) {
-     showAlert("An error occurred. Please try again.", "error");
-     console.error("Verification error:", error);
-   } finally {
-     setLoading(false);
-   }
- };
+      if (response.ok) {
+        if (json.success) {
+          setEmailVerified(true);
+          showAlert("Email verified successfully", "success");
+          if (json.isFullyVerified) {
+            navigate("/login");
+          } else if (smsEnabled) {
+            setStep(5); // Move to phone verification step
+          } else {
+            showAlert(
+              "Your email is verified. You can now log in. Note: SMS notifications are not enabled for your account.",
+              "info"
+            );
+            setTimeout(() => navigate("/login"), 3000); // Navigate to login after 3 seconds
+          }
+        } else {
+          handleErrorResponse(json);
+        }
+      } else {
+        if (response.status === 429) {
+          showAlert(
+            json.message || "Too many requests. Please try again later.",
+            "error"
+          );
+        } else {
+          handleErrorResponse(json);
+        }
+      }
+    } catch (error) {
+      showAlert("An error occurred. Please try again.", "error");
+      console.error("Verification error:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
- const handleVerifyPhone = async (e) => {
-   e.preventDefault();
-   setLoading(true);
-   try {
-     const response = await fetch(`${baseUrl}/api/auth/verify-phone`, {
-       method: "POST",
-       headers: { "Content-Type": "application/json" },
-       body: JSON.stringify({
-         phoneNumber: credentials.phoneNumber,
-         otp: phoneOtp,
-       }),
-     });
+  const handleVerifyPhone = async (e) => {
+    e.preventDefault();
+    if (!smsEnabled) {
+      showAlert("SMS notifications are not enabled for your account.", "info");
+      navigate("/login");
+      return;
+    }
 
-     const json = await response.json();
+    setLoading(true);
+    try {
+      const response = await fetch(`${baseUrl}/api/auth/verify-phone`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          phoneNumber: credentials.phoneNumber,
+          otp: phoneOtp,
+        }),
+      });
 
-     if (response.ok) {
-       if (json.success) {
-         setPhoneVerified(true);
-         showAlert(json.message, "success");
-         navigate("/login");
-       } else {
-         handleErrorResponse(json);
-       }
-     } else {
-       if (response.status === 429) {
-         showAlert(
-           json.message || "Too many requests. Please try again later.",
-           "error"
-         );
-       } else {
-         handleErrorResponse(json);
-       }
-     }
-   } catch (error) {
-     showAlert("An error occurred. Please try again.", "error");
-     console.error("Verification error:", error);
-   } finally {
-     setLoading(false);
-   }
- };
+      const json = await response.json();
 
- const handleResendOTP = async (type) => {
-   setLoading(true);
-   try {
-     const response = await fetch(`${baseUrl}/api/auth/resend-otp`, {
-       method: "POST",
-       headers: { "Content-Type": "application/json" },
-       body: JSON.stringify({
-         email: credentials.email,
-         type: type,
-       }),
-     });
+      if (response.ok) {
+        if (json.success) {
+          setPhoneVerified(true);
+          showAlert(json.message, "success");
+          navigate("/login");
+        } else {
+          handleErrorResponse(json);
+        }
+      } else {
+        if (response.status === 429) {
+          showAlert(
+            json.message || "Too many requests. Please try again later.",
+            "error"
+          );
+        } else {
+          handleErrorResponse(json);
+        }
+      }
+    } catch (error) {
+      showAlert("An error occurred. Please try again.", "error");
+      console.error("Verification error:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-     const json = await response.json();
+  const handleResendOTP = async (type) => {
+    setLoading(true);
+    try {
+      const response = await fetch(`${baseUrl}/api/auth/resend-otp`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: credentials.email,
+          type: type,
+        }),
+      });
 
-     if (response.ok) {
-       if (json.message) {
-         setCountdown(600);
-         showAlert(`New OTP sent to your ${type}. Please check.`, "success");
-       } else {
-         handleErrorResponse(json);
-       }
-     } else {
-       if (response.status === 429) {
-         showAlert(
-           json.message || "Too many requests. Please try again later.",
-           "error"
-         );
-       } else {
-         handleErrorResponse(json);
-       }
-     }
-   } catch (error) {
-     showAlert("An error occurred. Please try again.", "error");
-     console.error("Resend OTP error:", error);
-   } finally {
-     setLoading(false);
-   }
- };
+      const json = await response.json();
+
+      if (response.ok) {
+        if (json.message) {
+          setCountdown(600);
+          showAlert(`New OTP sent to your ${type}. Please check.`, "success");
+        } else {
+          handleErrorResponse(json);
+        }
+      } else {
+        if (response.status === 429) {
+          showAlert(
+            json.message || "Too many requests. Please try again later.",
+            "error"
+          );
+        } else {
+          handleErrorResponse(json);
+        }
+      }
+    } catch (error) {
+      showAlert("An error occurred. Please try again.", "error");
+      console.error("Resend OTP error:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const onChange = (e) => {
     setCredentials({ ...credentials, [e.target.name]: e.target.value });
@@ -309,7 +340,8 @@ const Signup = ({ showAlert }) => {
                   htmlFor="phoneNumber"
                   className="block text-sm font-medium text-[#6494b4] mb-1"
                 >
-                  Phone Number
+                  Phone Number{" "}
+                  {smsEnabled && <span className="text-red-500">*</span>}
                 </label>
                 <input
                   type="tel"
@@ -317,9 +349,13 @@ const Signup = ({ showAlert }) => {
                   name="phoneNumber"
                   value={credentials.phoneNumber}
                   onChange={onChange}
-                  required
+                  required={smsEnabled}
                   className="w-full px-4 py-3 bg-gray-50 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#6494b4] focus:border-transparent transition duration-300"
-                  placeholder="Enter your phone number"
+                  placeholder={
+                    smsEnabled
+                      ? "Enter your phone number (required)"
+                      : "Enter your phone number (optional)"
+                  }
                 />
               </div>
               <div className="flex items-center">
@@ -327,7 +363,15 @@ const Signup = ({ showAlert }) => {
                   type="checkbox"
                   id="smsEnabled"
                   checked={smsEnabled}
-                  onChange={(e) => setSmsEnabled(e.target.checked)}
+                  onChange={(e) => {
+                    setSmsEnabled(e.target.checked);
+                    if (e.target.checked && !credentials.phoneNumber) {
+                      showAlert(
+                        "Please provide a phone number to enable SMS notifications",
+                        "info"
+                      );
+                    }
+                  }}
                   className="h-4 w-4 text-[#6494b4] focus:ring-[#6494b4] border-gray-300 rounded"
                 />
                 <label
@@ -345,7 +389,16 @@ const Signup = ({ showAlert }) => {
                   Back
                 </button>
                 <button
-                  onClick={() => setStep(3)}
+                  onClick={() => {
+                    if (smsEnabled && !credentials.phoneNumber) {
+                      showAlert(
+                        "Please provide a phone number to enable SMS notifications",
+                        "error"
+                      );
+                    } else {
+                      setStep(3);
+                    }
+                  }}
                   className="bg-[#6494b4] text-white py-2 px-4 rounded-md hover:bg-[#567c92] transition duration-300 shadow-md text-lg font-semibold"
                 >
                   Next

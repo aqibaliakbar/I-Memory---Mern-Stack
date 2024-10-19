@@ -17,8 +17,9 @@ const UserSchema = new Schema({
   },
   phoneNumber: {
     type: String,
-    required: true,
+    required: false, // Changed from required: true
     unique: true,
+    sparse: true, // Added sparse index
   },
   date: {
     type: Date,
@@ -39,9 +40,8 @@ const UserSchema = new Schema({
   resetPasswordOTPExpires: Date,
   smsNotificationsEnabled: {
     type: Boolean,
-    default: true,
+    default: false, // Changed from default: true
   },
-
 });
 
 const User = mongoose.model("user", UserSchema);
